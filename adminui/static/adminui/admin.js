@@ -698,7 +698,7 @@ async function renderApiTokenSection() {
   content.innerHTML = '<p class="text-muted small">Loading…</p>';
   const { token } = await api('/api/account/token/');
   content.innerHTML = `
-    <p class="text-muted small">Send as <code>Authorization: Token &lt;token&gt;</code>. See <a href="/api/docs/">API docs</a>.</p>
+    <p class="text-muted small">Send as <code>Authorization: Token &lt;token&gt;</code>. See <a href="/api/docs/" target="_blank" rel="noopener">API docs</a>.</p>
     <div class="input-group mb-3" style="max-width: 36rem;">
       <input type="text" class="form-control font-monospace" id="api-token-value" value="${escapeHtml(token)}" readonly>
       <button class="btn btn-outline-secondary" type="button" id="api-token-copy" title="Copy"><i class="bi bi-clipboard"></i></button>
