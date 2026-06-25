@@ -5,3 +5,4 @@ __pycache__
 *.pyc
 .env
 staticfiles
+docker-compose.override.yml

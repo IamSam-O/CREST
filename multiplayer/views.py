@@ -1,4 +1,7 @@
+import base64
+
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from exams.models import AppSettings, Exam
@@ -23,12 +26,20 @@ def host_new(request):
 @login_required
 def host_room(request, room_code, host_secret):
     session = get_object_or_404(MultiplayerSession, room_code=room_code, host_secret=host_secret)
-    join_url = request.build_absolute_uri(f'/multiplayer/play/{session.room_code}/')
+    token = base64.urlsafe_b64encode(f'{session.room_code}:{session.passcode}'.encode()).decode().rstrip('=')
+    join_url = request.build_absolute_uri(f'/multiplayer/play/{token}/')
     return render(request, 'multiplayer/host_room.html', {
         'session': session, 'join_url': join_url, 'theme': AppSettings.get_solo().theme, 'nav_links': NAV_LINKS,
     })
 
 
-def play_room(request, room_code):
+def play_room(request, token):
+    try:
+        decoded = base64.urlsafe_b64decode(token + '==').decode()
+        room_code, passcode = decoded.split(':', 1)
+    except Exception:
+        raise Http404
     session = get_object_or_404(MultiplayerSession, room_code=room_code)
-    return render(request, 'multiplayer/play_room.html', {'session': session, 'theme': AppSettings.get_solo().theme})
+    return render(request, 'multiplayer/play_room.html', {
+        'session': session, 'passcode': passcode, 'theme': AppSettings.get_solo().theme,
+    })
