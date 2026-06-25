@@ -77,10 +77,6 @@ class MultiplayerConsumer(JsonWebsocketConsumer):
         session = self._get_session()
         if content.get('passcode') != session.passcode:
             raise ValueError('Incorrect passcode.')
-        if session.status == MultiplayerSession.ABANDONED:
-            raise ValueError('This session was ended by the host.')
-        if session.status == MultiplayerSession.FINISHED:
-            raise ValueError('This session has already ended.')
 
         display_name = (content.get('displayName') or '').strip()[:64] or 'Player'
         client_id = content.get('clientId') or secrets.token_urlsafe(8)
