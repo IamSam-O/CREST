@@ -9,15 +9,17 @@ services:
       retries: 10
 
   web:
-    image: ghcr.io/iamsam-o/crest:latest
     build: .
     ports:
       - "3000:3000"
     volumes:
       - ./data:/app/data
+    env_file:
+      - path: .env.example
+        required: true
+      - path: .env
+        required: false
     environment:
-      - DJANGO_DEBUG=${DJANGO_DEBUG:-0}
-      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
       - DJANGO_CSRF_TRUSTED_ORIGINS
       - REDIS_HOST=redis
     depends_on:

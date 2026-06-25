@@ -12,7 +12,8 @@ Backend: **Django 5 + Django REST Framework**. Frontend (`public/`): single-page
 
 ```bash
 # Primary: Docker (requires ./data/ to persist the SQLite DB; Redis runs as a sidecar)
-cp .env.example .env          # fill in DJANGO_SECRET_KEY at minimum
+# .env.example is loaded automatically as defaults — no setup needed
+# To customize (e.g. set DJANGO_CSRF_TRUSTED_ORIGINS for a reverse proxy), copy to .env and edit
 docker compose up --build
 
 # Local dev (single-player works without Redis; multiplayer WebSocket won't)
