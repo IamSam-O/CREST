@@ -17,4 +17,4 @@ COPY public ./public
 ENV DJANGO_SETTINGS_MODULE=config.settings
 EXPOSE 3000
 
-CMD ["sh", "-c", "mkdir -p /app/data && [ -f /app/data/.secret_key ] || python -c \"import secrets; print(secrets.token_hex(50))\" > /app/data/.secret_key && export DJANGO_SECRET_KEY=$(cat /app/data/.secret_key) && python manage.py migrate --noinput && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 3000 config.asgi:application"]
+CMD ["sh", "-c", "mkdir -p /app/data && [ -f /app/data/.secret_key ] || openssl rand -base64 128 > /app/data/.secret_key && export DJANGO_SECRET_KEY=$(cat /app/data/.secret_key) && python manage.py migrate --noinput && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 3000 config.asgi:application"]
