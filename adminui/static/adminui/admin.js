@@ -700,11 +700,18 @@ async function renderApiTokenSection() {
   content.innerHTML = `
     <p class="text-muted small">Send as <code>Authorization: Token &lt;token&gt;</code>. See <a href="/api/docs/" target="_blank" rel="noopener">API docs</a>.</p>
     <div class="input-group mb-3" style="max-width: 36rem;">
-      <input type="text" class="form-control font-monospace" id="api-token-value" value="${escapeHtml(token)}" readonly>
+      <input type="password" class="form-control font-monospace" id="api-token-value" value="${escapeHtml(token)}" readonly>
+      <button class="btn btn-outline-secondary" type="button" id="api-token-reveal" title="Show/hide token"><i class="bi bi-eye"></i></button>
       <button class="btn btn-outline-secondary" type="button" id="api-token-copy" title="Copy"><i class="bi bi-clipboard"></i></button>
     </div>
     <button class="btn btn-outline-danger btn-sm" id="api-token-regenerate">Regenerate token</button>
   `;
+  const tokenInput = document.getElementById('api-token-value');
+  document.getElementById('api-token-reveal').addEventListener('click', (e) => {
+    const show = tokenInput.type === 'password';
+    tokenInput.type = show ? 'text' : 'password';
+    e.currentTarget.querySelector('i').className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+  });
   document.getElementById('api-token-copy').addEventListener('click', () => {
     navigator.clipboard.writeText(token);
   });
