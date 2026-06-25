@@ -13,8 +13,11 @@ COPY adminui ./adminui
 COPY templates ./templates
 COPY manage.py ./
 COPY public ./public
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 
 ENV DJANGO_SETTINGS_MODULE=config.settings
 EXPOSE 3000
 
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 3000 config.asgi:application"]

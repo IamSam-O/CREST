@@ -1,5 +1,4 @@
 import os
-import secrets
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -7,10 +6,7 @@ DATA_DIR = BASE_DIR / 'data'
 DATA_DIR.mkdir(exist_ok=True)
 PUBLIC_DIR = BASE_DIR / 'public'
 
-_key_file = DATA_DIR / '.secret_key'
-if not _key_file.exists():
-    _key_file.write_text(secrets.token_hex(50))
-SECRET_KEY = _key_file.read_text().strip()
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'dev-insecure-secret-key-change-me')
 DEBUG = os.environ.get('DJANGO_DEBUG', '0') == '1'
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',') if h.strip()]
 
