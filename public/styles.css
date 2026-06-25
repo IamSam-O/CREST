@@ -407,7 +407,7 @@ h3 {
 .question-banner-wrap {
   position: relative;
   width: fit-content;
-  max-width: 100%;
+  max-width: min(100%, 1400px);
   min-width: 60%;
   align-self: center;
   margin: 0 auto 2rem;
@@ -463,13 +463,14 @@ body.theme-light .select-hint {
 .tile-grid {
   /* grid-template-columns is set inline per-question (one column per option) so all
      answers stay on a single row and resize fluidly with the viewport. */
-  flex: 1;
   display: grid;
-  grid-auto-rows: 1fr;
+  grid-auto-rows: auto;
   gap: 1.25rem;
   margin-bottom: 1.5rem;
-  min-height: 240px;
-  max-height: 65vh;
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 
@@ -487,7 +488,6 @@ body.theme-light .select-hint {
   height: 100%;
   min-height: 140px;
   min-width: 0;
-  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -613,15 +613,9 @@ body.theme-light .select-hint {
     min-height: 200px;
   }
 
-  .tile-grid {
-    max-height: none;
-    grid-auto-rows: auto;
-  }
-
   .answer-tile {
     font-size: max(1.15rem, calc(1.25rem - var(--tile-font-scale, 0) * 0.1rem));
     padding: 1.1rem 1.25rem;
     min-height: 110px;
-    height: auto;
   }
 }
