@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include "_head.html" %}
+  <title>{% block title %}Exam Practice{% endblock %}</title>
+</head>
+<body class="{% if theme == 'light' %}theme-light{% endif %}">
+
+<nav class="navbar navbar-dark">
+  <div class="container d-flex justify-content-between align-items-center">
+    <span class="navbar-brand mb-0 h1"><i class="bi bi-mortarboard-fill me-2"></i>Exam Practice</span>
+    <div class="d-flex gap-2 align-items-center">
+      <button id="nav-theme-toggle" class="btn btn-outline-secondary btn-sm" title="Toggle theme">
+        <i id="theme-icon" class="bi {% if theme == 'light' %}bi-moon-stars-fill{% else %}bi-sun-fill{% endif %}"></i>
+      </button>
+      {% block nav_right %}{% endblock %}
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+
+  {% block pre_game %}{% endblock %}
+
+  <div id="view-game" class="quiz-screen d-none">
+    <div class="d-flex justify-content-center gap-2 mb-3 flex-wrap">
+      <span id="take-points" class="pill-badge"></span>
+      <span id="take-multiplier" class="pill-badge"></span>
+    </div>
+    <div class="progress mb-4" style="height: 6px;">
+      <div id="take-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+    </div>
+    <div class="bonus-meter-wrap">
+      <div class="bonus-meter-label"><i class="bi bi-lightning-charge-fill"></i>Bonus window</div>
+      <div class="progress" style="height: 8px;">
+        <div id="take-bonus-bar" class="progress-bar" role="progressbar" style="width: 100%"></div>
+      </div>
+    </div>
+    <div class="question-banner-wrap">
+      <span id="take-progress" class="qnum-pill"></span>
+      <div class="question-banner">
+        <h2 id="take-question-text" class="mb-0"></h2>
+      </div>
+    </div>
+    <img id="take-image" class="img-fluid rounded mb-4 d-none question-image" alt="question image" />
+    <p id="take-select-hint" class="text-center select-hint d-none"></p>
+    <div id="take-options" class="tile-grid"></div>
+    {% block keyboard_tip %}{% endblock %}
+    <div id="take-feedback" class="feedback-banner d-none"></div>
+    {% block actions %}{% endblock %}
+  </div>
+
+  {% block status_area %}{% endblock %}
+  {% block extra_game %}{% endblock %}
+
+</main>
+
+{% block scripts %}{% endblock %}
+
+<script>
+document.getElementById('nav-theme-toggle').addEventListener('click', async () => {
+  const light = document.body.classList.toggle('theme-light');
+  document.getElementById('theme-icon').className = `bi ${light ? 'bi-moon-stars-fill' : 'bi-sun-fill'}`;
+  try {
+    const s = await fetch('/api/settings').then(r => r.json());
+    await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ soundEffectsEnabled: s.soundEffectsEnabled, theme: light ? 'light' : 'dark', maxInProgressInstances: s.maxInProgressInstances }),
+    });
+  } catch {}
+});
+</script>
+</body>
+</html>

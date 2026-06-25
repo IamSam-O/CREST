@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include "_head.html" %}
+  <title>Host Multiplayer - Exam Practice</title>
+</head>
+<body class="{% if theme == 'light' %}theme-light{% endif %}">
+
+{% include "_navbar.html" %}
+
+<main class="container pb-5">
+  <div id="resume-banner" class="d-none mb-4">
+    <div class="card border-0" style="background: var(--accent-secondary); color: var(--bg-deep);">
+      <div class="card-body p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <strong><i class="bi bi-arrow-repeat me-1"></i>Resume hosting</strong>
+          <span id="resume-exam-name" class="ms-2 small opacity-75"></span>
+        </div>
+        <div class="d-flex gap-2">
+          <a id="resume-link" href="#" class="btn btn-sm" style="background:var(--bg-deep);color:var(--accent-secondary);">Resume</a>
+          <button id="resume-dismiss" class="btn btn-sm btn-outline-secondary">Dismiss</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="max-width: 32rem; margin: 0 auto;">
+    <div class="card-body p-4">
+      <h2 class="h5 mb-1"><i class="bi bi-people-fill me-2"></i>Host a Multiplayer Round</h2>
+      <p class="text-muted small mb-4">No login needed to host or join — pick an exam and share the room link.</p>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-4">
+          <label class="form-label">Exam</label>
+          <select name="exam_id" class="form-select" required>
+            {% for exam in exams %}
+              <option value="{{ exam.id }}">{{ exam.name }}</option>
+            {% empty %}
+              <option disabled>No exams available — import a CSV first</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="d-flex gap-2">
+          <a href="/" class="btn btn-secondary">Back</a>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-play-fill me-1"></i>Create Room
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+
+{% include "_nav_mp.html" %}
+<script>
+  const saved = JSON.parse(localStorage.getItem('mp_host_session') || 'null');
+  if (saved) {
+    document.getElementById('resume-banner').classList.remove('d-none');
+    document.getElementById('resume-link').href = saved.url;
+    document.getElementById('resume-exam-name').textContent = saved.examName || '';
+    document.getElementById('resume-dismiss').onclick = () => {
+      localStorage.removeItem('mp_host_session');
+      document.getElementById('resume-banner').classList.add('d-none');
+    };
+  }
+</script>
+</body>
+</html>

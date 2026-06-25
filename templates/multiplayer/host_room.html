@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include "_head.html" %}
+  <title>Hosting {{ session.room_code }} - Exam Practice</title>
+</head>
+<body class="{% if theme == 'light' %}theme-light{% endif %}">
+
+{% include "_navbar.html" %}
+
+<main class="container pb-5">
+  <div class="row g-4">
+
+    <!-- Room info + controls -->
+    <div class="col-12 col-md-5">
+      <div class="card h-100">
+        <div class="card-body p-4">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div>
+              <div class="text-muted small">Room Code</div>
+              <div class="h2 mb-0 fw-bold" style="letter-spacing: 0.1em; color: var(--accent-secondary);">{{ session.room_code }}</div>
+            </div>
+            <div class="ms-auto text-end">
+              <div class="text-muted small">Passcode</div>
+              <div class="h4 mb-0 fw-bold">{{ session.passcode }}</div>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <div class="text-muted small mb-1">Share this link with players</div>
+            <div class="d-flex gap-2 align-items-center">
+              <input id="join-url" class="form-control form-control-sm" value="{{ join_url }}" readonly />
+              <button class="btn btn-outline-secondary btn-sm flex-shrink-0" onclick="navigator.clipboard.writeText('{{ join_url }}');this.innerHTML='<i class=\'bi bi-check-lg\'></i>'">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small text-muted mb-1">Time limit per question</label>
+            <div class="d-flex align-items-center gap-2">
+              <input id="time-limit" type="number" min="0" max="300" step="5" value="0" class="form-control form-control-sm" style="width: 90px;" />
+              <span class="text-muted small">seconds (0 = no limit)</span>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 flex-wrap mb-3">
+            <button id="btn-start" class="btn btn-primary">
+              <i class="bi bi-play-fill me-1"></i>Start
+            </button>
+            <button id="btn-resume" class="btn btn-success d-none">
+              <i class="bi bi-play-circle-fill me-1"></i>Resume
+            </button>
+            <button id="btn-next" class="btn btn-outline-secondary">
+              <i class="bi bi-skip-forward-fill me-1"></i>Next / Reveal
+            </button>
+            <button id="btn-end" class="btn btn-danger btn-sm ms-auto align-self-center">
+              <i class="bi bi-stop-fill me-1"></i>End
+            </button>
+          </div>
+
+          <div id="status" class="text-muted small mb-2"></div>
+          <a id="btn-new-game" href="/multiplayer/" class="btn btn-primary btn-sm d-none">
+            <i class="bi bi-plus-circle me-1"></i>Host Another Round
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="col-12 col-md-7">
+      <div class="card h-100">
+        <div class="card-body p-4">
+          <h3 class="h6 text-muted mb-3"><i class="bi bi-trophy me-1"></i>Leaderboard</h3>
+          <div id="leaderboard" class="d-flex flex-column gap-2">
+            <p class="text-muted small mb-0">Waiting for players to join…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+{% include "_nav_mp.html" %}
+<script>
+  const ROOM_CODE = "{{ session.room_code|escapejs }}";
+  const HOST_SECRET = "{{ session.host_secret|escapejs }}";
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${window.location.host}/ws/multiplayer/${ROOM_CODE}/`);
+  const statusEl = document.getElementById('status');
+  const leaderboardEl = document.getElementById('leaderboard');
+
+  // Store session so host can resume if navigated away
+  localStorage.setItem('mp_host_session', JSON.stringify({
+    url: window.location.href,
+    roomCode: ROOM_CODE,
+    examName: "{{ session.exam|escapejs }}",
+  }));
+
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'host_join', hostSecret: HOST_SECRET }));
+  ws.onerror = () => { statusEl.textContent = 'WebSocket connection failed.'; };
+  ws.onclose = (e) => { if (!e.wasClean) statusEl.textContent = 'Connection lost — refresh the page.'; };
+
+  const btnStart  = document.getElementById('btn-start');
+  const btnResume = document.getElementById('btn-resume');
+
+  function setPaused(paused) {
+    btnResume.classList.toggle('d-none', !paused);
+    btnStart.classList.toggle('d-none', paused);
+  }
+
+  ws.onmessage = (evt) => {
+    const msg = JSON.parse(evt.data);
+    if (msg.type === 'error') { statusEl.textContent = 'Error: ' + msg.error; return; }
+    if (msg.type === 'host_ready') {
+      statusEl.textContent = `Waiting for players… (${msg.status})`;
+      setPaused(msg.status === 'paused');
+    }
+    if (msg.type === 'participant_joined') statusEl.textContent = `${msg.displayName} joined.`;
+    if (msg.type === 'question') { statusEl.textContent = `Q${msg.index + 1}/${msg.total}: ${msg.question.questionText}`; setPaused(false); }
+    if (msg.type === 'reveal' || msg.type === 'leaderboard') renderLeaderboard(msg.leaderboard, msg.final);
+  };
+
+  function renderLeaderboard(players, final) {
+    if (!players.length) { leaderboardEl.innerHTML = '<p class="text-muted small mb-0">No scores yet.</p>'; return; }
+    leaderboardEl.innerHTML = players.map((p, i) =>
+      `<div class="entry-card d-flex justify-content-between align-items-center">
+        <span><strong>#${i+1}</strong> ${p.displayName}${!p.connected ? ' <span class="text-muted small">(left)</span>' : ''}</span>
+        <span class="badge" style="background:var(--accent-primary);">${p.score} pts</span>
+      </div>`
+    ).join('');
+    if (final) {
+      statusEl.textContent = 'Game over — final results above.';
+      localStorage.removeItem('mp_host_session');
+      document.getElementById('btn-new-game').classList.remove('d-none');
+    }
+  }
+
+  btnStart.onclick = () => {
+    const timeLimitSeconds = parseInt(document.getElementById('time-limit').value, 10) || 0;
+    ws.send(JSON.stringify({ type: 'start', timeLimitSeconds }));
+  };
+  btnResume.onclick = () => ws.send(JSON.stringify({ type: 'resume' }));
+  document.getElementById('btn-next').onclick  = () => ws.send(JSON.stringify({ type: 'next' }));
+  document.getElementById('btn-end').onclick   = () => {
+    localStorage.removeItem('mp_host_session');
+    ws.send(JSON.stringify({ type: 'end' }));
+  };
+</script>
+</body>
+</html>

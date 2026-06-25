@@ -1,0 +1,381 @@
+{% extends "_quiz_base.html" %}
+
+{% block title %}Join {{ session.room_code }} - Exam Practice{% endblock %}
+
+{% block nav_right %}
+  <span class="text-white small opacity-75">Room <strong>{{ session.room_code }}</strong></span>
+{% endblock %}
+
+{% block pre_game %}
+<div id="view-join" class="py-5">
+  <div class="card" style="max-width: 28rem; margin: 0 auto;">
+    <div class="card-body p-4">
+      <h2 class="h5 mb-1"><i class="bi bi-people-fill me-2"></i>Join Room</h2>
+      <p class="text-muted small mb-4">Room <strong>{{ session.room_code }}</strong> — enter your name and the passcode to join.</p>
+      <div class="mb-3">
+        <label class="form-label">Your name</label>
+        <input id="display-name" class="form-control" placeholder="Display name" maxlength="64" />
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Passcode</label>
+        <input id="passcode" class="form-control" placeholder="6-digit passcode" />
+      </div>
+      <button id="btn-join" class="btn btn-primary w-100">
+        <i class="bi bi-box-arrow-in-right me-1"></i>Join
+      </button>
+      <div id="join-error" class="text-danger mt-2 small"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block keyboard_tip %}
+<p class="text-center text-muted small mb-4">Tip: press 1–6 on your keyboard to select an option.</p>
+{% endblock %}
+
+{% block actions %}
+<div class="d-flex justify-content-center gap-2 flex-wrap mt-3">
+  <button id="take-submit" class="btn btn-primary" disabled>Submit Answer</button>
+</div>
+{% endblock %}
+
+{% block status_area %}
+<div id="status-wrap" class="text-center py-5 d-none">
+  <p id="status-text" class="text-muted mb-0">Waiting for the host to start…</p>
+</div>
+{% endblock %}
+
+{% block extra_game %}
+<div id="leaderboard-wrap" class="d-none mt-4">
+  <h3 class="h6 text-muted mb-3"><i class="bi bi-trophy me-1"></i>Leaderboard</h3>
+  <div id="leaderboard" class="d-flex flex-column gap-2"></div>
+  <p id="countdown-text" class="text-center text-muted small mt-3 d-none"></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const ROOM_CODE      = "{{ session.room_code|escapejs }}";
+  const STORAGE_KEY    = `mp_client_${ROOM_CODE}`;
+  const TILE_COLORS    = 6;
+  const MULTIPLIER_MAX = 30;
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${window.location.host}/ws/multiplayer/${ROOM_CODE}/`);
+
+  const joinView    = document.getElementById('view-join');
+  const gameView    = document.getElementById('view-game');
+  const joinErrorEl = document.getElementById('join-error');
+  const statusWrap  = document.getElementById('status-wrap');
+  const statusText  = document.getElementById('status-text');
+  const lbWrap      = document.getElementById('leaderboard-wrap');
+  const lbEl        = document.getElementById('leaderboard');
+  const countdownEl = document.getElementById('countdown-text');
+  const scoreEl     = document.getElementById('take-points');
+  const multEl      = document.getElementById('take-multiplier');
+  const qnumEl      = document.getElementById('take-progress');
+  const qTextEl     = document.getElementById('take-question-text');
+  const progressBar = document.getElementById('take-progress-bar');
+  const hintEl      = document.getElementById('take-select-hint');
+  const feedbackEl  = document.getElementById('take-feedback');
+  const tileGrid    = document.getElementById('take-options');
+  const bonusBar    = document.getElementById('take-bonus-bar');
+  const imgEl       = document.getElementById('take-image');
+  const submitBtn   = document.getElementById('take-submit');
+
+  let score             = 0;
+  let streak            = 1;
+  let answered          = false;
+  let selectedOptionIds = new Set();
+  let pendingQuestion   = null;
+  let leaderboardTimer  = null;
+  let countdownInterval = null;
+  let bonusMeterInterval= null;
+  let timeLimitInterval = null;
+  let questionStartTime = null;
+  let bonusWindowSeconds= 30;
+  let timeLimitSeconds  = 0;
+  let basePoints        = 1;
+  let playerName        = '';
+
+  ws.onerror = () => { joinErrorEl.textContent = 'WebSocket connection failed.'; };
+  ws.onclose = (e) => { if (!e.wasClean && gameView.classList.contains('d-none')) joinErrorEl.textContent = 'Connection lost — refresh the page.'; };
+
+  document.getElementById('btn-join').onclick = () => {
+    if (ws.readyState !== WebSocket.OPEN) { joinErrorEl.textContent = 'Not connected — refresh the page.'; return; }
+    const displayName = document.getElementById('display-name').value.trim();
+    const passcode    = document.getElementById('passcode').value.trim();
+    ws.send(JSON.stringify({ type: 'guest_join', displayName, passcode, clientId: localStorage.getItem(STORAGE_KEY) || undefined }));
+  };
+
+  function submitAnswer() {
+    if (answered) return;
+    answered = true;
+    clearBonusMeter();
+    clearTimeLimitCountdown();
+    const pointsAwarded = computePoints();
+    const ids = [...selectedOptionIds];
+    tileGrid.querySelectorAll('.answer-tile').forEach(b => b.disabled = true);
+    submitBtn.disabled = true;
+    ws.send(JSON.stringify({ type: 'answer', selectedOptionIds: ids, pointsAwarded }));
+  }
+
+  submitBtn.onclick = () => {
+    if (selectedOptionIds.size === 0) return;
+    submitAnswer();
+  };
+
+  function startBonusMeter() {
+    clearBonusMeter();
+    bonusMeterInterval = setInterval(() => {
+      const e = elapsed();
+      const pct = Math.max(0, (bonusWindowSeconds - e) / bonusWindowSeconds) * 100;
+      bonusBar.style.width = `${pct}%`;
+      bonusBar.classList.toggle('bg-danger', e >= bonusWindowSeconds - 5);
+      if (e >= bonusWindowSeconds) clearBonusMeter();
+    }, 200);
+  }
+
+  function clearBonusMeter() {
+    if (bonusMeterInterval) { clearInterval(bonusMeterInterval); bonusMeterInterval = null; }
+  }
+
+  function startTimeLimitCountdown() {
+    if (timeLimitInterval) clearInterval(timeLimitInterval);
+    if (timeLimitSeconds <= 0) return;
+    const deadline = Date.now() + timeLimitSeconds * 1000;
+    timeLimitInterval = setInterval(() => {
+      const remaining = Math.max(0, (deadline - Date.now()) / 1000);
+      hintEl.textContent = hintEl.dataset.baseHint + ` — ${Math.ceil(remaining)}s left`;
+      if (remaining <= 0) {
+        clearInterval(timeLimitInterval); timeLimitInterval = null;
+        submitAnswer();
+      }
+    }, 200);
+  }
+
+  function clearTimeLimitCountdown() {
+    if (timeLimitInterval) { clearInterval(timeLimitInterval); timeLimitInterval = null; }
+  }
+
+  function elapsed() {
+    return questionStartTime ? (Date.now() - questionStartTime) / 1000 : 0;
+  }
+
+  function computePoints() {
+    const e = elapsed();
+    const bonusFraction = e < bonusWindowSeconds ? Math.max(0, (bonusWindowSeconds - e) / bonusWindowSeconds) : 0;
+    return (basePoints + Math.round(basePoints * bonusFraction)) * streak;
+  }
+
+  function showGameView() {
+    gameView.classList.remove('d-none');
+    statusWrap.classList.add('d-none');
+    lbWrap.classList.add('d-none');
+    if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+  }
+
+  function addNamePill(name) {
+    const pillsRow = scoreEl.parentElement;
+    if (!document.getElementById('take-player-name')) {
+      const el = document.createElement('span');
+      el.id = 'take-player-name';
+      el.className = 'pill-badge';
+      el.innerHTML = `<i class="bi bi-person-fill me-1"></i>${DOMPurify.sanitize(name)}`;
+      pillsRow.prepend(el);
+    }
+  }
+
+  function showStatusView(text) {
+    clearBonusMeter();
+    clearTimeLimitCountdown();
+    gameView.classList.add('d-none');
+    lbWrap.classList.add('d-none');
+    if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+    statusText.textContent = text;
+    statusWrap.classList.remove('d-none');
+  }
+
+  function showLeaderboardView(players, countdown) {
+    clearBonusMeter();
+    clearTimeLimitCountdown();
+    gameView.classList.add('d-none');
+    statusWrap.classList.add('d-none');
+    renderLeaderboard(players);
+    lbWrap.classList.remove('d-none');
+
+    if (!countdown) { countdownEl.classList.add('d-none'); return; }
+
+    let secs = 3;
+    countdownEl.textContent = `Next question in ${secs}…`;
+    countdownEl.classList.remove('d-none');
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+      secs--;
+      if (secs > 0) countdownEl.textContent = `Next question in ${secs}…`;
+      else { clearInterval(countdownInterval); countdownInterval = null; }
+    }, 1000);
+
+    if (leaderboardTimer) clearTimeout(leaderboardTimer);
+    leaderboardTimer = setTimeout(() => {
+      leaderboardTimer = null;
+      countdownEl.classList.add('d-none');
+      if (pendingQuestion) { const q = pendingQuestion; pendingQuestion = null; renderQuestion(q); }
+    }, 3000);
+  }
+
+  function renderTiles(q) {
+    tileGrid.innerHTML = '';
+    q.options.forEach((opt, idx) => {
+      const btn = document.createElement('button');
+      btn.className = `answer-tile tile-color-${idx % TILE_COLORS}`;
+      btn.dataset.optionId = opt.id;
+      btn.innerHTML = `<div class="answer-tile-label">${DOMPurify.sanitize(opt.text)}</div>`;
+      if (selectedOptionIds.has(parseInt(opt.id))) btn.classList.add('selected');
+      btn.onclick = () => {
+        if (answered) return;
+        const id = parseInt(btn.dataset.optionId);
+        const wasSelected = selectedOptionIds.has(id);
+        if (q.questionType !== 'multi') {
+          selectedOptionIds.clear();
+          if (!wasSelected) selectedOptionIds.add(id);
+        } else {
+          if (wasSelected) selectedOptionIds.delete(id);
+          else selectedOptionIds.add(id);
+        }
+        submitBtn.disabled = selectedOptionIds.size === 0;
+        renderTiles(q);
+      };
+      tileGrid.appendChild(btn);
+    });
+  }
+
+  function renderQuestion(msg) {
+    answered = false;
+    selectedOptionIds = new Set();
+    submitBtn.disabled = true;
+    feedbackEl.classList.add('d-none');
+    feedbackEl.classList.remove('correct', 'incorrect');
+
+    bonusWindowSeconds = msg.bonusWindowSeconds || 30;
+    timeLimitSeconds = msg.timeLimit || 0;
+    const q = msg.question;
+    basePoints = q.points || 1;
+
+    qTextEl.innerHTML = DOMPurify.sanitize(q.questionText);
+    qnumEl.textContent = `Q${msg.index + 1}/${msg.total}`;
+    progressBar.style.width = `${((msg.index + 1) / msg.total) * 100}%`;
+
+    if (q.imageLink) { imgEl.src = q.imageLink; imgEl.classList.remove('d-none'); }
+    else { imgEl.classList.add('d-none'); }
+
+    const count = q.correctCount || 1;
+    const baseHint = count > 1 ? `Select ${count} answers` : 'Select 1 answer';
+    hintEl.dataset.baseHint = baseHint;
+    hintEl.textContent = baseHint;
+    hintEl.classList.remove('d-none');
+
+    tileGrid.style.gridTemplateColumns = `repeat(${q.options.length}, 1fr)`;
+    renderTiles(q);
+
+    bonusBar.style.width = '100%';
+    bonusBar.classList.remove('bg-danger');
+    questionStartTime = Date.now();
+    startBonusMeter();
+    startTimeLimitCountdown();
+    showGameView();
+  }
+
+  function renderLeaderboard(players) {
+    lbEl.innerHTML = players.map((p, i) =>
+      `<div class="entry-card d-flex justify-content-between align-items-center">
+        <span><strong>#${i + 1}</strong> ${p.displayName}</span>
+        <span class="badge" style="background:var(--accent-primary);">${p.score} pts</span>
+      </div>`
+    ).join('') || '<p class="text-muted small mb-0">No scores yet.</p>';
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (answered || gameView.classList.contains('d-none')) return;
+    const idx = parseInt(e.key, 10) - 1;
+    if (idx >= 0) {
+      const tiles = tileGrid.querySelectorAll('.answer-tile');
+      if (tiles[idx]) { e.preventDefault(); tiles[idx].click(); }
+    }
+  });
+
+  ws.onmessage = (evt) => {
+    const msg = JSON.parse(evt.data);
+
+    if (msg.type === 'error') { joinErrorEl.textContent = msg.error; return; }
+
+    if (msg.type === 'joined') {
+      localStorage.setItem(STORAGE_KEY, msg.clientId);
+      playerName = msg.displayName || '';
+      if (playerName) addNamePill(playerName);
+      joinView.classList.add('d-none');
+      showStatusView(msg.status === 'paused' ? 'The host disconnected — waiting for them to resume…' : 'Waiting for the host to start…');
+    }
+
+    if (msg.type === 'question') {
+      if (leaderboardTimer) {
+        pendingQuestion = msg;
+      } else {
+        renderQuestion(msg);
+      }
+    }
+
+    if (msg.type === 'answer_ack') {
+      clearTimeLimitCountdown();
+      tileGrid.querySelectorAll('.answer-tile').forEach(btn => {
+        const id = parseInt(btn.dataset.optionId);
+        if (msg.correctOptionIds && msg.correctOptionIds.includes(id)) {
+          btn.classList.add('correct');
+        } else if (selectedOptionIds.has(id) && !msg.isCorrect) {
+          btn.classList.add('incorrect-selected');
+        }
+      });
+      feedbackEl.classList.remove('d-none', 'correct', 'incorrect');
+      feedbackEl.classList.add(msg.isCorrect ? 'correct' : 'incorrect');
+      feedbackEl.textContent = msg.isCorrect ? `Correct! +${msg.pointsAwarded} pts` : 'Incorrect.';
+      if (msg.isCorrect) {
+        score += msg.pointsAwarded;
+        streak = Math.min(MULTIPLIER_MAX, streak + 1);
+      } else {
+        streak = 1;
+      }
+      scoreEl.textContent = `${score} pts`;
+      multEl.textContent  = `${streak}x`;
+    }
+
+    if (msg.type === 'reveal') {
+      tileGrid.querySelectorAll('.answer-tile').forEach(btn => {
+        if (msg.correctOptionIds.includes(parseInt(btn.dataset.optionId))) {
+          btn.classList.add('correct');
+        }
+      });
+      clearBonusMeter();
+      if (leaderboardTimer) clearTimeout(leaderboardTimer);
+      leaderboardTimer = setTimeout(() => {
+        leaderboardTimer = null;
+        showLeaderboardView(msg.leaderboard, true);
+      }, 1500);
+    }
+
+    if (msg.type === 'leaderboard' && msg.final) {
+      if (leaderboardTimer) { clearTimeout(leaderboardTimer); leaderboardTimer = null; }
+      if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+      pendingQuestion = null;
+      showLeaderboardView(msg.leaderboard, false);
+      countdownEl.classList.add('d-none');
+      statusText.textContent = 'Game over — final results!';
+      statusWrap.classList.remove('d-none');
+    }
+
+    if (msg.type === 'host_disconnected') {
+      if (leaderboardTimer) { clearTimeout(leaderboardTimer); leaderboardTimer = null; }
+      pendingQuestion = null;
+      showStatusView('The host disconnected — waiting for them to resume…');
+    }
+  };
+</script>
+{% endblock %}

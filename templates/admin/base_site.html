@@ -1,0 +1,55 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ title }} | CREST Admin{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">CREST Admin</a></div>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* Retints Django admin's documented CSS custom properties to match the
+     app's navy/teal theme (public/styles.css) instead of building a full
+     admin theme from scratch - same palette, not pixel-identical chrome. */
+  :root, html[data-theme="light"], html[data-theme="dark"] {
+    --primary: #1f7a8c;
+    --secondary: #14505c;
+    --accent: #f5a623;
+    --primary-fg: #fff;
+    --body-fg: #f3f6f8;
+    --body-bg: #0b1320;
+    --body-quiet-color: rgba(243, 246, 248, 0.7);
+    --body-loud-color: #f3f6f8;
+    --header-color: #fff;
+    --header-branding-color: #fff;
+    --header-bg: #1f7a8c;
+    --header-link-color: #fff;
+    --breadcrumbs-fg: rgba(255, 255, 255, 0.85);
+    --breadcrumbs-link-fg: #fff;
+    --breadcrumbs-bg: #14505c;
+    --link-fg: #5fb6c9;
+    --link-hover-color: #f5a623;
+    --link-selected-fg: #f5a623;
+    --hairline-color: rgba(255, 255, 255, 0.12);
+    --border-color: rgba(255, 255, 255, 0.16);
+    --error-fg: #ff7b7b;
+    --button-fg: #2a1605;
+    --button-bg: #f5a623;
+    --button-hover-bg: #d4870f;
+    --default-button-bg: #1f7a8c;
+    --default-button-hover-bg: #14505c;
+    --darkened-bg: #060a12;
+    --selected-bg: rgba(255, 255, 255, 0.06);
+    --selected-row: rgba(255, 255, 255, 0.1);
+  }
+  body, body.change-form, body.change-list {
+    font-family: 'Nunito', 'Inter', system-ui, -apple-system, sans-serif;
+    background: radial-gradient(circle at top left, #15324a, #0b1320 100%) fixed;
+  }
+  .module, #content-related .module {
+    background: rgba(255, 255, 255, 0.06);
+  }
+</style>
+{% endblock %}

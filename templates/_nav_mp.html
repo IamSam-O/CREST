@@ -1,0 +1,14 @@
+<script>
+document.getElementById('nav-theme-toggle').addEventListener('click', async () => {
+  const light = document.body.classList.toggle('theme-light');
+  document.getElementById('theme-icon').className = `bi ${light ? 'bi-moon-stars-fill' : 'bi-sun-fill'}`;
+  try {
+    const s = await fetch('/api/settings').then(r => r.json());
+    await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ soundEffectsEnabled: s.soundEffectsEnabled, theme: light ? 'light' : 'dark', maxInProgressInstances: s.maxInProgressInstances }),
+    });
+  } catch {}
+});
+</script>

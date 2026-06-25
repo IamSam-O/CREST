@@ -1,0 +1,7 @@
+data
+.claude
+/*.png
+__pycache__
+*.pyc
+.env
+studyguide/staticfiles
