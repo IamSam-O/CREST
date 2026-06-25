@@ -1,6 +1,6 @@
 # CREST
 
-CREST is a self-hosted exam practice app. Admins build exams from CSV question banks, users (or anonymous guests) take them solo with scoring and timed-bonus points, and hosts can run live multiplayer quiz sessions over WebSockets.
+CREST is a self-hosted exam practice app. Admins build exams from CSV question banks, registered users take them solo with scoring and timed-bonus points, and hosts can run live multiplayer quiz sessions that anonymous guests can join over WebSockets.
 
 ## Features
 
@@ -29,7 +29,7 @@ cp .env.example .env   # optional - defaults work for local use
 docker compose up
 ```
 
-This starts Redis and the app (`ghcr.io/iamsam-o/crest:latest`) on **http://localhost:3000**, persisting data to `./data`. On first boot the container generates a Django secret key, runs migrations, and collects static files.
+This starts Redis and the app (`ghcr.io/iamsam-o/crest:latest`) on **http://localhost:3000**, persisting data to `./data`. On first boot the container generates a Django secret key (saved to `data/.secret_key`, not configured via env), runs migrations, and collects static files.
 
 See [`.env.example`](.env.example) for available environment variables, notably `DJANGO_CSRF_TRUSTED_ORIGINS` if you're putting CREST behind a reverse proxy on a public domain.
 
@@ -48,13 +48,12 @@ Useful environment variables (see [`config/settings.py`](config/settings.py)):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DJANGO_SECRET_KEY` | dev key | Django secret key |
 | `DJANGO_DEBUG` | `0` | Set to `1` for debug mode |
 | `DJANGO_ALLOWED_HOSTS` | `*` | Comma-separated allowed hosts |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | _(empty)_ | Comma-separated trusted origins behind a TLS-terminating proxy |
 | `REDIS_HOST` / `REDIS_PORT` | `redis` / `6379` | Channels layer connection |
 
-SMTP credentials for invite/notification emails are configured from the admin UI (`/manage/` → Email Settings), not via environment variables.
+The Django secret key is not set via environment variable — it's generated on first run and persisted to `data/.secret_key`. SMTP credentials for invite/notification emails are configured from the admin UI (`/manage/` → Email Settings), not via environment variables.
 
 ## Project layout
 
