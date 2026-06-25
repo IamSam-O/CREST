@@ -8,13 +8,9 @@ DATA_DIR.mkdir(exist_ok=True)
 PUBLIC_DIR = BASE_DIR / 'public'
 
 _key_file = DATA_DIR / '.secret_key'
-if os.environ.get('DJANGO_SECRET_KEY'):
-    SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
-elif _key_file.exists():
-    SECRET_KEY = _key_file.read_text().strip()
-else:
-    SECRET_KEY = secrets.token_hex(50)
-    _key_file.write_text(SECRET_KEY)
+if not _key_file.exists():
+    _key_file.write_text(secrets.token_hex(50))
+SECRET_KEY = _key_file.read_text().strip()
 DEBUG = os.environ.get('DJANGO_DEBUG', '0') == '1'
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',') if h.strip()]
 

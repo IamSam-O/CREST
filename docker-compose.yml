@@ -16,7 +16,6 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - DJANGO_SECRET_KEY
       - DJANGO_DEBUG=${DJANGO_DEBUG:-0}
       - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
       - DJANGO_CSRF_TRUSTED_ORIGINS
