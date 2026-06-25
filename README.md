@@ -2,6 +2,10 @@
 
 CREST is a self-hosted exam practice app. Admins build exams from CSV question banks, registered users take them solo with scoring and timed-bonus points, and hosts can run live multiplayer quiz sessions that anonymous guests can join over WebSockets.
 
+## About this project
+
+This is a personal project, and generative AI was used extensively in its development. Every effort has been made to keep the implementation simple and to apply reasonable security measures, but it is provided **as-is, with no warranty of any kind**. Issues and feature requests will not be resolved or supported. The project is open source — feel free to clone, modify, and self-host it, with proper accreditation.
+
 ## Features
 
 - **Exam practice** — single-choice and checkbox (multi-answer) questions, per-question points, optional images and answer explanations, and a configurable time-bonus window.
