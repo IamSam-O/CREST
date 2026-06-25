@@ -58,11 +58,10 @@ class UserSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
         groups = validated_data.pop('groups', None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
+        instance = super().update(instance, validated_data)
         if password:
             instance.set_password(password)
-        instance.save()
+            instance.save()
         if groups is not None:
             instance.groups.set(groups)
         return instance
@@ -103,11 +102,10 @@ class EmailSettingsSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
+        instance = super().update(instance, validated_data)
         if password:
             instance.password = password
-        instance.save()
+            instance.save()
         return instance
 
 

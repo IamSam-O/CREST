@@ -159,4 +159,3 @@ CHANNEL_LAYERS = {
 # stored in accounts.EmailSettings (DB-backed, editable without a rebuild),
 # not here - every send explicitly builds its own connection from that row.
 
-MAX_IN_PROGRESS_INSTANCES_PER_USER_DEFAULT = 5

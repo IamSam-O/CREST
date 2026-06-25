@@ -79,16 +79,6 @@ def my_token(request):
     return Response({'token': token.key})
 
 
-def _test_connection(email_settings):
-    connection = email_settings.get_connection()
-    try:
-        connection.open()
-        connection.close()
-    except Exception as exc:
-        return False, str(exc)
-    return True, None
-
-
 @extend_schema(
     tags=['Account'], summary='Verify SMTP connection',
     description='Checks the saved email settings can open a connection without sending anything. Admin only.',
@@ -101,13 +91,12 @@ def _test_connection(email_settings):
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def test_email_connection(request):
-    """Verifies the currently saved SMTP settings actually work, without
-    sending a real invite. Reports the specific failure reason (auth,
-    connection, TLS handshake) rather than a generic error. Used for API
-    parity; the same check also runs from the admin-only settings page."""
-    success, error = _test_connection(EmailSettings.get_solo())
-    if not success:
-        return Response({'success': False, 'error': error}, status=400)
+    connection = EmailSettings.get_solo().get_connection()
+    try:
+        connection.open()
+        connection.close()
+    except Exception as exc:
+        return Response({'success': False, 'error': str(exc)}, status=400)
     return Response({'success': True})
 
 

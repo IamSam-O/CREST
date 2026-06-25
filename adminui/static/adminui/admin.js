@@ -254,10 +254,6 @@ function collectFormData(fields, formEl) {
 let activeSection = null;
 let nestedView = null; // {type, parentId, parentLabel, parentSection}
 
-function resourceConfig(key) {
-  return RESOURCES[key];
-}
-
 async function renderSection(key) {
   activeSection = key;
   nestedView = null;
@@ -274,7 +270,7 @@ async function renderSection(key) {
 }
 
 async function renderListSection(key, opts = {}) {
-  const config = resourceConfig(key);
+  const config = RESOURCES[key];
   document.getElementById('admin-section-title').textContent = config.label;
   const createBtn = document.getElementById('admin-create-btn');
   createBtn.classList.remove('d-none');
@@ -319,10 +315,6 @@ function renderCell(column, value) {
   if (column.type === 'bool') return value ? '<i class="bi bi-check-lg text-success"></i>' : '';
   if (column.type === 'date') return value ? new Date(value).toLocaleString() : '';
   if (column.type === 'ref') return escapeHtml(refLabel(column.source, value));
-  if (column.type === 'richtext') {
-    const text = String(value || '').replace(/<[^>]+>/g, '');
-    return escapeHtml(text.length > 80 ? text.slice(0, 80) + '…' : text);
-  }
   return escapeHtml(value);
 }
 
@@ -358,7 +350,7 @@ function openNestedView(nestedKey, parentId, parentLabel, parentSection) {
 // ---- Create/edit modal ----
 
 function openFormModal(key, item, extraPayload) {
-  const config = resourceConfig(key);
+  const config = RESOURCES[key];
   const modalEl = document.getElementById('admin-form-modal');
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   const form = document.getElementById('admin-form');

@@ -18,7 +18,7 @@ def _detect_type(raw_type, correct_answer):
     normalized = (raw_type or '').strip().lower()
     if 'checkbox' in normalized or 'multi' in normalized:
         return Question.MULTI
-    if len([s for s in correct_answer.split(',') if s.strip()]) > 1:
+    if sum(1 for s in correct_answer.split(',') if s.strip()) > 1:
         return Question.MULTI
     return Question.SINGLE
 

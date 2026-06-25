@@ -13,7 +13,7 @@ NAV_LINKS = [{'url': '/', 'icon': 'bi-house-door', 'label': 'Library'}]
 def host_new(request):
     if request.method == 'POST':
         exam = get_object_or_404(Exam, id=request.POST.get('exam_id'))
-        host = request.user if request.user.is_authenticated else None
+        host = request.user
         session = MultiplayerSession.objects.create(exam=exam, host=host)
         return redirect('mp_host_room', room_code=session.room_code, host_secret=session.host_secret)
     exams = Exam.objects.order_by('-created_at')

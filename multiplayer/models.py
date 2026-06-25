@@ -20,10 +20,8 @@ class MultiplayerSession(models.Model):
     LOBBY = 'lobby'
     ACTIVE = 'active'
     PAUSED = 'paused'
-    FINISHED = 'finished'
-    ABANDONED = 'abandoned'
     STATUS_CHOICES = [
-        (LOBBY, 'lobby'), (ACTIVE, 'active'), (PAUSED, 'paused'), (FINISHED, 'finished'), (ABANDONED, 'abandoned'),
+        (LOBBY, 'lobby'), (ACTIVE, 'active'), (PAUSED, 'paused'),
     ]
 
     room_code = models.CharField(max_length=12, unique=True, default=_generate_room_code)

@@ -19,6 +19,8 @@ def add_error_responses(result, generator, request, public):
         for method, operation in path_data.items():
             if not isinstance(operation, dict):
                 continue
+            if path.startswith('/api/admin/'):
+                operation.setdefault('tags', ['Admin'])
             responses = operation.setdefault('responses', {})
             is_mutating = method.upper() in ('POST', 'PUT', 'PATCH')
             for code, (description, conditional) in _ERROR_RESPONSES.items():

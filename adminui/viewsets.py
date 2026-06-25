@@ -1,6 +1,6 @@
 from django.contrib.auth.models import Group, Permission
 from django.db.models import F
-from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as rf_serializers, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
@@ -23,19 +23,6 @@ from .serializers import (
 )
 
 
-def _admin_schema(noun, plural=None):
-    n = plural or f'{noun}s'
-    return extend_schema_view(**{
-        'list': extend_schema(tags=['Admin'], summary=f'List {n}'),
-        'create': extend_schema(tags=['Admin'], summary=f'Create {noun}'),
-        'retrieve': extend_schema(tags=['Admin'], summary=f'Get {noun}'),
-        'update': extend_schema(tags=['Admin'], summary=f'Replace {noun}'),
-        'partial_update': extend_schema(tags=['Admin'], summary=f'Patch {noun}'),
-        'destroy': extend_schema(tags=['Admin'], summary=f'Delete {noun}'),
-    })
-
-
-@_admin_schema('user')
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.order_by('username')
     serializer_class = UserSerializer
@@ -53,7 +40,6 @@ class UserViewSet(viewsets.ModelViewSet):
 MEANINGFUL_PERMISSION_CODENAMES = ['add_exam', 'view_exam', 'view_attempt', 'change_appsettings']
 
 
-@_admin_schema('group')
 class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.prefetch_related('permissions').order_by('name')
     serializer_class = GroupSerializer
@@ -80,7 +66,6 @@ class GroupViewSet(viewsets.ModelViewSet):
         return Response(list(perms))
 
 
-@_admin_schema('invite')
 class InviteViewSet(viewsets.ModelViewSet):
     queryset = Invite.objects.select_related('group', 'invited_by').order_by('-created_at')
     serializer_class = InviteSerializer
@@ -117,21 +102,18 @@ def exam_options_view(request):
     return Response(list(Exam.objects.order_by('name').values('id', 'name')))
 
 
-@_admin_schema('attempt')
 class AttemptViewSet(viewsets.ModelViewSet):
     queryset = Attempt.objects.select_related('exam', 'user').order_by('-finished_at')
     serializer_class = AttemptSerializer
     permission_classes = [IsAdminUser]
 
 
-@_admin_schema('multiplayer session')
 class MultiplayerSessionViewSet(viewsets.ModelViewSet):
     queryset = MultiplayerSession.objects.select_related('exam', 'host').order_by('-created_at')
     serializer_class = MultiplayerSessionSerializer
     permission_classes = [IsAdminUser]
 
 
-@_admin_schema('multiplayer participant')
 class MultiplayerParticipantViewSet(viewsets.ModelViewSet):
     serializer_class = MultiplayerParticipantSerializer
     permission_classes = [IsAdminUser]

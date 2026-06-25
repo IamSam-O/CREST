@@ -34,34 +34,7 @@ async function api(url, options = {}) {
   return data;
 }
 
-// Themed replacement for confirm() — native dialogs can't be styled or centered on the page.
-function confirmLeaveExam() {
-  return new Promise((resolve) => {
-    const modalEl = document.getElementById('leave-exam-modal');
-    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-    const confirmBtn = document.getElementById('leave-exam-confirm');
-
-    function cleanup() {
-      confirmBtn.removeEventListener('click', onConfirm);
-      modalEl.removeEventListener('hidden.bs.modal', onHidden);
-    }
-    function onConfirm() {
-      cleanup();
-      resolve(true);
-      modal.hide();
-    }
-    function onHidden() {
-      cleanup();
-      resolve(false);
-    }
-
-    confirmBtn.addEventListener('click', onConfirm);
-    modalEl.addEventListener('hidden.bs.modal', onHidden);
-    modal.show();
-  });
-}
-
-// Generic themed replacement for confirm() — used by every destructive/confirm action
+// Themed replacement for confirm() — used by every destructive/confirm action
 // in the app so popups are consistent with the page's theme instead of native browser dialogs.
 function confirmAction(message, { title = 'Confirm', confirmLabel = 'Confirm', confirmClass = 'btn-outline-danger' } = {}) {
   return new Promise((resolve) => {
@@ -98,7 +71,7 @@ function confirmAction(message, { title = 'Confirm', confirmLabel = 'Confirm', c
 document.getElementById('nav-back-library').addEventListener('click', async () => {
   const inExam = takeState && !views.take.classList.contains('d-none');
   if (inExam) {
-    const leave = await confirmLeaveExam();
+    const leave = await confirmAction('You are in the middle of an exam. Your progress will be saved so you can resume later.', { title: 'Leave exam?', confirmLabel: 'Leave Exam' });
     if (!leave) return;
     pauseBonusTracking();
     await saveProgress();
@@ -1045,12 +1018,8 @@ async function handleDeleteQuestion(questionId) {
 document.getElementById('edit-add-question').addEventListener('click', () => openQuestionEditor(null));
 document.getElementById('edit-delete-exam').addEventListener('click', () => deleteExam(currentExam));
 
-function backToLibraryFromEditExam() {
-  showView('library');
-  loadLibrary();
-}
-document.getElementById('edit-exam-back').addEventListener('click', backToLibraryFromEditExam);
-document.getElementById('edit-exam-back-top').addEventListener('click', backToLibraryFromEditExam);
+document.getElementById('edit-exam-back').addEventListener('click', () => { showView('library'); loadLibrary(); });
+document.getElementById('edit-exam-back-top').addEventListener('click', () => { showView('library'); loadLibrary(); });
 
 // ---------- Question editor ----------
 

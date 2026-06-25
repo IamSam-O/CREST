@@ -122,12 +122,12 @@ def exam_list(request):
         .annotate(question_count=Count('questions'))
         .order_by('-created_at')
     )
-    last_attempts = {
-        a['exam_id']: a
-        for a in Attempt.objects.filter(exam__in=exams, user=request.user)
-        .values('exam_id')
-        .annotate(last_finished=Max('finished_at'))
-    }
+    _attempts = Attempt.objects.filter(exam__in=exams, user=request.user).order_by(
+        'exam_id', '-finished_at'
+    ).values('exam_id', 'num_correct', 'num_questions', 'points_earned', 'total_points')
+    last_attempts = {}
+    for a in _attempts:
+        last_attempts.setdefault(a['exam_id'], a)
     progress_by_exam = {
         p.exam_id: p
         for p in InProgressAttempt.objects.filter(exam__in=exams, user=request.user)
@@ -141,11 +141,7 @@ def exam_list(request):
     is_admin = request.user.is_staff
     data = []
     for exam in exams:
-        last_attempt = None
-        if exam.id in last_attempts:
-            last_attempt = (
-                Attempt.objects.filter(exam=exam, user=request.user).order_by('-finished_at').first()
-            )
+        last_attempt = last_attempts.get(exam.id)
         item = {
             'id': exam.id,
             'name': exam.name,
@@ -153,10 +149,10 @@ def exam_list(request):
             'keywords': exam.keywords,
             'question_count': exam.question_count,
             'can_edit': is_admin or exam.owner_id == request.user.id,
-            'last_score': last_attempt.num_correct if last_attempt else None,
-            'last_total': last_attempt.num_questions if last_attempt else None,
-            'last_points_earned': last_attempt.points_earned if last_attempt else None,
-            'last_total_points': last_attempt.total_points if last_attempt else None,
+            'last_score': last_attempt['num_correct'] if last_attempt else None,
+            'last_total': last_attempt['num_questions'] if last_attempt else None,
+            'last_points_earned': last_attempt['points_earned'] if last_attempt else None,
+            'last_total_points': last_attempt['total_points'] if last_attempt else None,
             'attempt_count': attempt_counts.get(exam.id, 0),
         }
         progress = progress_by_exam.get(exam.id)
