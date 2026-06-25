@@ -15,8 +15,6 @@ services:
     volumes:
       - ./data:/app/data
     env_file:
-      - path: .env.example
-        required: true
       - path: .env
         required: false
     environment:
