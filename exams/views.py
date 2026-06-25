@@ -13,6 +13,7 @@ from rest_framework import serializers as rf_serializers
 from rest_framework import exceptions
 from rest_framework.decorators import api_view, authentication_classes, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -225,6 +226,7 @@ def exam_settings(request, exam_id):
 
 @extend_schema(tags=['Exams'], summary='Export exam as CSV', responses={(200, 'text/csv'): OpenApiTypes.STR})
 @api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication, TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def exam_export(request, exam_id):
     exam = get_object_or_404(Exam, id=exam_id)

@@ -567,6 +567,14 @@ function renderOptionsUI() {
     optionsList.appendChild(tile);
   });
 
+  const tmp = document.createElement('div');
+  const maxLen = q.options.reduce((max, opt) => {
+    tmp.innerHTML = DOMPurify.sanitize(opt.text);
+    return Math.max(max, tmp.textContent.length);
+  }, 0);
+  const scale = Math.max(0, Math.min(1, (maxLen - 50) / 130));
+  optionsList.style.setProperty('--tile-font-scale', scale.toFixed(3));
+
   const feedback = document.getElementById('take-feedback');
   const checkBtn = document.getElementById('take-check');
   if (checkedResult) {

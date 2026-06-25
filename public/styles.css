@@ -362,6 +362,16 @@ h3 {
   padding: 1.5rem 0.5rem 2.5rem;
 }
 
+@media (min-width: 992px) {
+  #view-take,
+  .quiz-screen {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    padding-left: clamp(2rem, 5vw, 5rem);
+    padding-right: clamp(2rem, 5vw, 5rem);
+  }
+}
+
 .pill-badge {
   background: rgba(0, 0, 0, 0.45);
   color: #fff;
@@ -459,6 +469,7 @@ body.theme-light .select-hint {
   gap: 1.25rem;
   margin-bottom: 1.5rem;
   min-height: 240px;
+  max-height: 55vh;
 }
 
 
@@ -467,7 +478,7 @@ body.theme-light .select-hint {
   border-radius: 0.65rem;
   padding: 1.5rem 2rem;
   font-weight: 600;
-  font-size: 1.75rem;
+  font-size: max(0.85rem, calc(1.75rem - var(--tile-font-scale, 0) * 0.9rem));
   line-height: 1.4;
   letter-spacing: 0;
   color: #fff;
@@ -580,7 +591,7 @@ body.theme-light .select-hint {
   }
 
   .answer-tile {
-    font-size: 1.5rem;
+    font-size: max(0.75rem, calc(1.5rem - var(--tile-font-scale, 0) * 0.75rem));
     padding: 1.25rem 1.5rem;
     min-height: 125px;
   }
@@ -603,7 +614,7 @@ body.theme-light .select-hint {
   }
 
   .answer-tile {
-    font-size: 1.25rem;
+    font-size: max(0.65rem, calc(1.25rem - var(--tile-font-scale, 0) * 0.6rem));
     padding: 1.1rem 1.25rem;
     min-height: 110px;
   }
