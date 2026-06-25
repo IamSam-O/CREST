@@ -9,7 +9,7 @@ services:
       retries: 10
 
   web:
-    build: .
+    image: ghcr.io/iamsam-o/crest:latest
     ports:
       - "3000:3000"
     volumes:
