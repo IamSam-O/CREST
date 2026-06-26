@@ -1181,11 +1181,7 @@ document.getElementById('question-editor-form').addEventListener('submit', async
 
 // ---------- Utils ----------
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
+const escapeHtml = (s) => DOMPurify.sanitize(s ?? '', {ALLOWED_TAGS: []});
 
 // Tooltips need explicit activation in Bootstrap 5 (unlike data-bs-toggle="modal" triggers).
 document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => new bootstrap.Tooltip(el));

@@ -1,16 +1,12 @@
+import operator as _op
+
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.db import models
 from django.db.models.functions import Lower
 
 
-_GRADE_OPS = {
-    '==': lambda p, v: p == v,
-    '<':  lambda p, v: p < v,
-    '>':  lambda p, v: p > v,
-    '>=': lambda p, v: p >= v,
-    '<=': lambda p, v: p <= v,
-}
+_GRADE_OPS = {'==': _op.eq, '<': _op.lt, '>': _op.gt, '>=': _op.ge, '<=': _op.le}
 
 
 class GradeScale(models.Model):
@@ -93,6 +89,11 @@ class Attempt(models.Model):
     num_correct = models.PositiveIntegerField()
     total_points = models.PositiveIntegerField(default=0)
     points_earned = models.PositiveIntegerField(default=0)
+    grade = models.CharField(max_length=20, null=True, blank=True)
+    grade_scale = models.ForeignKey(
+        GradeScale, on_delete=models.SET_NULL, null=True, blank=True, related_name='attempt_grades',
+    )
+    grade_log = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ['-finished_at']

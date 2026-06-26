@@ -5,8 +5,10 @@ from django.contrib.auth.models import Group, Permission
 from django.db import transaction
 from django.db.models import F
 from django.http import HttpResponse
-from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers as rf_serializers, viewsets
+from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
+from rest_framework import viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
@@ -52,16 +54,7 @@ class GroupViewSet(viewsets.ModelViewSet):
     serializer_class = GroupSerializer
     permission_classes = [IsAdminUser]
 
-    @extend_schema(
-        tags=['Admin'], summary='List meaningful permissions',
-        description='Returns only the permission codenames that actually gate features in this app.',
-        responses={200: inline_serializer('PermissionOption', fields={
-            'id': rf_serializers.IntegerField(),
-            'name': rf_serializers.CharField(),
-            'codename': rf_serializers.CharField(),
-            'app_label': rf_serializers.CharField(),
-        }, many=True)},
-    )
+    @extend_schema(tags=['Admin'], summary='List meaningful permissions', responses={200: OpenApiTypes.OBJECT})
     @action(detail=False)
     def permissions_catalog(self, request):
         perms = (
@@ -92,17 +85,7 @@ class InviteViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=201)
 
 
-# Read-only - exam content/ownership is managed from the Library now, not
-# Manage; this just backs the Exam column/select in Attempts and Multiplayer
-# Sessions (which are still staff-level, not admin-only).
-@extend_schema(
-    tags=['Admin'], summary='List exams (id + name only)',
-    description='Lightweight list for populating select dropdowns in the Attempts and Multiplayer Sessions tables.',
-    responses={200: inline_serializer('ExamOptionAdmin', fields={
-        'id': rf_serializers.IntegerField(),
-        'name': rf_serializers.CharField(),
-    }, many=True)},
-)
+@extend_schema(tags=['Admin'], summary='List exams (id + name only)', responses={200: OpenApiTypes.OBJECT})
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def exam_options_view(request):
@@ -110,9 +93,17 @@ def exam_options_view(request):
 
 
 class AttemptViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Attempt.objects.select_related('exam', 'exam__grade_scale', 'user').order_by('-finished_at')
     serializer_class = AttemptSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Attempt.objects.select_related('exam', 'user').order_by('-finished_at')
+        if user.is_staff:
+            return qs
+        if user.has_perm('exams.add_exam'):
+            return qs.filter(exam__owner=user)
+        return qs.none()
 
     @action(detail=True, methods=['get'])
     def drill(self, request, pk=None):
@@ -139,9 +130,7 @@ class AttemptViewSet(viewsets.ReadOnlyModelViewSet):
                 'options': [{'id': o.id, 'text': o.option_text, 'isCorrect': o.is_correct} for o in opts],
             })
         pct = round(attempt.num_correct / attempt.num_questions * 100) if attempt.num_questions else 0
-        grade = None
-        if attempt.exam.grade_scale_id:
-            grade = attempt.exam.grade_scale.compute_grade(pct)
+        base_earned = sum(r['points'] for r in results if r['isCorrect'])
         return Response({
             'id': attempt.id,
             'examName': attempt.exam.name,
@@ -151,10 +140,45 @@ class AttemptViewSet(viewsets.ReadOnlyModelViewSet):
             'numCorrect': attempt.num_correct,
             'totalPoints': attempt.total_points,
             'pointsEarned': attempt.points_earned,
+            'basePointsEarned': base_earned,
+            'bonusPointsEarned': max(0, attempt.points_earned - base_earned),
             'percentCorrect': pct,
-            'grade': grade,
+            'grade': attempt.grade,
+            'gradeScaleId': attempt.grade_scale_id,
+            'gradeLog': attempt.grade_log,
             'results': results,
         })
+
+    @action(detail=True, methods=['post'], url_path='re-evaluate')
+    def re_evaluate(self, request, pk=None):
+        attempt = self.get_object()
+        note = (request.data.get('note') or '').strip()
+        if not note:
+            return Response({'error': 'A note is required explaining the change.'}, status=400)
+
+        grade = None
+        scale_name = None
+        grade_scale_id = request.data.get('grade_scale_id')
+        if grade_scale_id:
+            scale = GradeScale.objects.filter(id=grade_scale_id).first()
+            if not scale:
+                return Response({'error': 'Grade scale not found.'}, status=404)
+            pct = round(attempt.num_correct / attempt.num_questions * 100) if attempt.num_questions else 0
+            grade = scale.compute_grade(pct) or 'N/A'
+            scale_name = scale.name
+
+        attempt.grade_log = (attempt.grade_log or []) + [{
+            'changed_at': timezone.now().isoformat(),
+            'changed_by': request.user.username,
+            'scale_name': scale_name,
+            'previous_grade': attempt.grade,
+            'new_grade': grade,
+            'note': note,
+        }]
+        attempt.grade = grade
+        attempt.grade_scale_id = int(grade_scale_id) if grade_scale_id else None
+        attempt.save(update_fields=['grade', 'grade_scale_id', 'grade_log'])
+        return Response({'grade': attempt.grade, 'grade_log': attempt.grade_log})
 
     @action(detail=True, methods=['get'], url_path='missed-csv')
     def missed_csv(self, request, pk=None):
@@ -299,14 +323,7 @@ def email_settings_view(request):
 # Lets the Manage UI show/hide the staff-level and admin-level sidebar groups -
 # /manage/ itself is login_required (everyone needs it for My Account/API Token),
 # but most sections are still gated server-side by IsAdminUser/IsManageAdmin above.
-@extend_schema(
-    tags=['Admin'], summary='Current user roles and capabilities',
-    description='Used by the app to decide which sidebar sections and UI controls to show.',
-    responses={200: inline_serializer('WhoamiResponse', fields={
-        'is_staff': rf_serializers.BooleanField(),
-        'can_create_exam': rf_serializers.BooleanField(),
-    })},
-)
+@extend_schema(tags=['Admin'], summary='Current user roles and capabilities', responses={200: OpenApiTypes.OBJECT})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def whoami_view(request):
