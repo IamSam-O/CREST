@@ -6,3 +6,5 @@ __pycache__
 .env
 staticfiles
 docker-compose.override.yml
+**/node_modules
+/public
