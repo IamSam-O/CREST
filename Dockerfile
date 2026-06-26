@@ -1,3 +1,10 @@
+FROM node:22-slim AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install --silent
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -12,7 +19,7 @@ COPY multiplayer ./multiplayer
 COPY adminui ./adminui
 COPY templates ./templates
 COPY manage.py ./
-COPY public ./public
+COPY --from=frontend-builder /public ./public
 
 ENV DJANGO_SETTINGS_MODULE=config.settings
 EXPOSE 3000

@@ -2,7 +2,7 @@ from django.contrib.auth.models import Group, Permission
 from rest_framework import serializers
 
 from accounts.models import EmailSettings, Invite, User
-from exams.models import AppSettings, Attempt, GradeScale
+from exams.models import AppSettings, ExamInstance, GradeScale, QuestionBank
 from multiplayer.models import MultiplayerParticipant, MultiplayerSession
 
 
@@ -74,8 +74,10 @@ class InviteSerializer(serializers.ModelSerializer):
         read_only_fields = ['token', 'invited_by', 'created_at', 'accepted_at']
 
 
-class AttemptSerializer(serializers.ModelSerializer):
+class ExamInstanceSerializer(serializers.ModelSerializer):
     percent_correct = serializers.SerializerMethodField(read_only=True)
+    exam_name = serializers.CharField(source='exam.name', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
 
     def get_percent_correct(self, obj):
         if not obj.num_questions:
@@ -83,13 +85,22 @@ class AttemptSerializer(serializers.ModelSerializer):
         return round(obj.num_correct / obj.num_questions * 100)
 
     class Meta:
-        model = Attempt
+        model = ExamInstance
         fields = [
-            'id', 'exam', 'user', 'started_at', 'finished_at',
+            'id', 'exam', 'exam_name', 'user', 'username', 'started_at', 'finished_at',
             'num_questions', 'num_correct', 'total_points', 'points_earned',
             'percent_correct', 'grade', 'grade_scale',
         ]
-        read_only_fields = ['finished_at', 'percent_correct', 'grade']
+        read_only_fields = ['finished_at', 'percent_correct', 'grade', 'exam_name', 'username']
+
+
+class QuestionBankSerializer(serializers.ModelSerializer):
+    question_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = QuestionBank
+        fields = ['id', 'name', 'source_filename', 'keywords', 'owner', 'created_at', 'question_count']
+        read_only_fields = ['created_at', 'question_count']
 
 
 class GradeScaleSerializer(serializers.ModelSerializer):
@@ -105,9 +116,6 @@ class AppSettingsSerializer(serializers.ModelSerializer):
 
 
 class EmailSettingsSerializer(serializers.ModelSerializer):
-    # Write-only and optional, like UserSerializer's password field - blank
-    # means "leave the stored password unchanged" rather than wiping it, and
-    # it's never echoed back to the client.
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:

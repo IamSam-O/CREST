@@ -9,6 +9,6 @@ def admin_ui_index(request):
     return render(request, 'adminui/index.html', {
         'theme': AppSettings.get_solo().theme,
         'nav_links': [
-            {'url': '/', 'icon': 'bi-house-door', 'label': 'Library'},
+            {'url': '/', 'icon': 'bi-house-door', 'label': 'Home'},
         ],
     })

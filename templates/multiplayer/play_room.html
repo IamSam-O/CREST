@@ -226,10 +226,10 @@
       btn.className = `answer-tile tile-color-${idx % TILE_COLORS}`;
       btn.dataset.optionId = opt.id;
       btn.innerHTML = `<div class="answer-tile-label">${DOMPurify.sanitize(opt.text)}</div>`;
-      if (selectedOptionIds.has(parseInt(opt.id))) btn.classList.add('selected');
+      if (selectedOptionIds.has(String(opt.id))) btn.classList.add('selected');
       btn.onclick = () => {
         if (answered) return;
-        const id = parseInt(btn.dataset.optionId);
+        const id = String(btn.dataset.optionId);
         const wasSelected = selectedOptionIds.has(id);
         if (q.questionType !== 'multi') {
           selectedOptionIds.clear();
@@ -323,7 +323,7 @@
     if (msg.type === 'answer_ack') {
       clearTimeLimitCountdown();
       tileGrid.querySelectorAll('.answer-tile').forEach(btn => {
-        const id = parseInt(btn.dataset.optionId);
+        const id = String(btn.dataset.optionId);
         if (msg.correctOptionIds && msg.correctOptionIds.includes(id)) {
           btn.classList.add('correct');
         } else if (selectedOptionIds.has(id) && !msg.isCorrect) {
@@ -345,7 +345,7 @@
 
     if (msg.type === 'reveal') {
       tileGrid.querySelectorAll('.answer-tile').forEach(btn => {
-        if (msg.correctOptionIds.includes(parseInt(btn.dataset.optionId))) {
+        if (msg.correctOptionIds.includes(String(btn.dataset.optionId))) {
           btn.classList.add('correct');
         }
       });

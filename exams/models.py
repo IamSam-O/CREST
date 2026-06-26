@@ -1,4 +1,5 @@
-import operator as _op
+import random
+import uuid
 
 from django.conf import settings
 from django.contrib.auth.models import Group
@@ -6,17 +7,16 @@ from django.db import models
 from django.db.models.functions import Lower
 
 
-_GRADE_OPS = {'==': _op.eq, '<': _op.lt, '>': _op.gt, '>=': _op.ge, '<=': _op.le}
-
-
 class GradeScale(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
-    # [{value: int, operator: str, grade: str}] — evaluated in order, first match wins
     entries_json = models.JSONField(default=list)
 
     def compute_grade(self, percent):
+        ops = {'==': lambda a, b: a == b, '<': lambda a, b: a < b, '>': lambda a, b: a > b,
+               '>=': lambda a, b: a >= b, '<=': lambda a, b: a <= b}
         for entry in self.entries_json:
-            fn = _GRADE_OPS.get(entry.get('operator', '>='))
+            fn = ops.get(entry.get('operator', '>='))
             if fn and fn(percent, entry.get('value', 0)):
                 return entry.get('grade', '')
         return None
@@ -25,28 +25,20 @@ class GradeScale(models.Model):
         return self.name
 
 
-class Exam(models.Model):
+class QuestionBank(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     source_filename = models.CharField(max_length=255, null=True, blank=True)
-    bonus_window_seconds = models.PositiveIntegerField(default=30)
     keywords = models.CharField(max_length=2000, default='', blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    # Null for legacy exams created before ownership existed - treated as
-    # admin-only to edit (see accounts.permissions.is_admin_user) but still
-    # publicly visible like any other exam with no allowed_groups.
     owner = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='owned_exams',
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='owned_banks',
     )
-    # Empty = visible/practicable by everyone (today's behavior). Non-empty
-    # restricts visibility to members of these groups, plus the owner and admins.
-    allowed_groups = models.ManyToManyField(Group, blank=True, related_name='accessible_exams')
-    grade_scale = models.ForeignKey(
-        GradeScale, on_delete=models.SET_NULL, null=True, blank=True, related_name='exams',
-    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(Lower('name'), name='uniq_exam_name_nocase'),
+            models.UniqueConstraint(Lower('name'), name='uniq_bank_name_nocase'),
         ]
 
     def __str__(self):
@@ -54,11 +46,13 @@ class Exam(models.Model):
 
 
 class Question(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     SINGLE = 'single'
     MULTI = 'multi'
     TYPE_CHOICES = [(SINGLE, 'single'), (MULTI, 'multi')]
 
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='questions')
+    bank = models.ForeignKey(QuestionBank, on_delete=models.CASCADE, related_name='questions')
+    category = models.CharField(max_length=100, default='', blank=True)
     question_text = models.TextField()
     question_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     points = models.PositiveIntegerField(default=1)
@@ -71,6 +65,7 @@ class Question(models.Model):
 
 
 class Option(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='options')
     option_text = models.TextField()
     is_correct = models.BooleanField(default=False)
@@ -80,9 +75,64 @@ class Option(models.Model):
         ordering = ['sort_order']
 
 
-class Attempt(models.Model):
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='attempts')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='attempts')
+class Exam(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    question_bank = models.ForeignKey(
+        QuestionBank, on_delete=models.SET_NULL, null=True, blank=True, related_name='exams',
+    )
+    question_count = models.PositiveIntegerField(default=10)
+    # {"Category": weight_percent, ...} — weights sum ≤ 100; remainder fills from the full pool
+    category_weights = models.JSONField(default=dict, blank=True)
+    bonus_window_seconds = models.PositiveIntegerField(default=30)
+    grade_scale = models.ForeignKey(
+        GradeScale, on_delete=models.SET_NULL, null=True, blank=True, related_name='exams',
+    )
+    allowed_groups = models.ManyToManyField(Group, blank=True, related_name='accessible_exams')
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='owned_exams',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(Lower('name'), name='uniq_exam_name_nocase'),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def sample_questions(self):
+        if not self.question_bank_id:
+            return []
+        all_qs = list(self.question_bank.questions.order_by('sort_order'))
+        count = min(self.question_count, len(all_qs))
+        if not count:
+            return []
+        if not self.category_weights:
+            return random.sample(all_qs, count)
+        by_cat = {}
+        for q in all_qs:
+            by_cat.setdefault(q.category or '', []).append(q)
+        selected, used = [], set()
+        for cat, weight in self.category_weights.items():
+            pool = [q for q in by_cat.get(cat, []) if q.id not in used]
+            drawn = random.sample(pool, min(round(count * weight / 100), len(pool)))
+            selected.extend(drawn)
+            used.update(q.id for q in drawn)
+        leftover = [q for q in all_qs if q.id not in used]
+        if len(selected) < count:
+            selected.extend(random.sample(leftover, min(count - len(selected), len(leftover))))
+        return selected
+
+
+class ExamInstance(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='instances')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='exam_instances',
+    )
     started_at = models.DateTimeField()
     finished_at = models.DateTimeField(auto_now_add=True)
     num_questions = models.PositiveIntegerField()
@@ -91,7 +141,7 @@ class Attempt(models.Model):
     points_earned = models.PositiveIntegerField(default=0)
     grade = models.CharField(max_length=20, null=True, blank=True)
     grade_scale = models.ForeignKey(
-        GradeScale, on_delete=models.SET_NULL, null=True, blank=True, related_name='attempt_grades',
+        GradeScale, on_delete=models.SET_NULL, null=True, blank=True, related_name='instance_grades',
     )
     grade_log = models.JSONField(default=list, blank=True)
 
@@ -99,17 +149,21 @@ class Attempt(models.Model):
         ordering = ['-finished_at']
 
 
-class AttemptAnswer(models.Model):
-    attempt = models.ForeignKey(Attempt, on_delete=models.CASCADE, related_name='answers')
+class ExamInstanceAnswer(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    instance = models.ForeignKey(ExamInstance, on_delete=models.CASCADE, related_name='answers')
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='+')
     selected_option_ids = models.JSONField(default=list)
     is_correct = models.BooleanField()
     points_awarded = models.PositiveIntegerField(default=0)
 
 
-class InProgressAttempt(models.Model):
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='in_progress_attempts')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='in_progress_attempts')
+class InProgressInstance(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='in_progress_instances')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='in_progress_instances',
+    )
     questions_json = models.JSONField()
     answers_json = models.JSONField()
     checked_json = models.JSONField()
@@ -127,9 +181,6 @@ class InProgressAttempt(models.Model):
 
 
 class AppSettings(models.Model):
-    """Singleton row (manual get_or_create(pk=1), matches the existing
-    single-row app_settings table)."""
-
     id = models.PositiveIntegerField(primary_key=True, default=1)
     sound_effects_enabled = models.BooleanField(default=False)
     theme = models.CharField(max_length=10, default='dark')

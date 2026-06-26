@@ -1,6 +1,7 @@
 import random
 import secrets
 import string
+import uuid
 
 from django.conf import settings
 from django.db import models
@@ -17,6 +18,7 @@ def _generate_passcode():
 
 
 class MultiplayerSession(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     LOBBY = 'lobby'
     ACTIVE = 'active'
     PAUSED = 'paused'
@@ -49,6 +51,7 @@ class MultiplayerSession(models.Model):
 
 
 class MultiplayerParticipant(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     session = models.ForeignKey(MultiplayerSession, on_delete=models.CASCADE, related_name='participants')
     client_id = models.CharField(max_length=64)
     display_name = models.CharField(max_length=64)
