@@ -376,6 +376,25 @@ async function loadGroups() {
   renderGroupOptions(document.getElementById('exam-group-input'));
 }
 
+// ---------- Grade Scales ----------
+
+let allGradeScales = [];
+
+function renderGradeScaleOptions(selectEl, selectedId) {
+  const blank = '<option value="">— None —</option>';
+  selectEl.innerHTML = blank + allGradeScales
+    .map((s) => `<option value="${s.id}" ${String(s.id) === String(selectedId) ? 'selected' : ''}>${escapeHtml(s.name)}</option>`)
+    .join('');
+}
+
+async function loadGradeScales() {
+  try {
+    allGradeScales = await api('/api/grade-scales');
+  } catch (_) {
+    allGradeScales = [];
+  }
+}
+
 // ---------- Settings ----------
 
 let appSettings = { soundEffectsEnabled: false, theme: 'dark', maxInProgressInstances: 5 };
@@ -751,19 +770,27 @@ document.getElementById('take-finish').addEventListener('click', async () => {
   });
 
   await clearProgress(takeState.examId);
-  renderResults(takeState.examId, result.examName, result.numCorrect, result.numQuestions, result.pointsEarned, result.totalPoints, result.results, 'library');
+  renderResults(takeState.examId, result.examName, result.numCorrect, result.numQuestions, result.pointsEarned, result.totalPoints, result.results, 'library', result.grade);
 });
 
 // ---------- Results ----------
 
 let resultsReturnTo = 'library';
 
-function renderResults(examId, examName, numCorrect, numQuestions, pointsEarned, totalPoints, results, returnTo = 'library') {
+function renderResults(examId, examName, numCorrect, numQuestions, pointsEarned, totalPoints, results, returnTo = 'library', grade = null) {
   resultsReturnTo = returnTo;
   document.getElementById('results-back').textContent = returnTo === 'history' ? 'Back to History' : 'Back to Library';
 
   document.getElementById('results-summary').textContent =
     `${examName} — ${numCorrect}/${numQuestions} correct (${Math.round((numCorrect / numQuestions) * 100)}%) · ${pointsEarned} pts earned (standard max ${totalPoints})`;
+
+  const gradeEl = document.getElementById('results-grade');
+  if (grade) {
+    gradeEl.textContent = grade;
+    gradeEl.classList.remove('d-none');
+  } else {
+    gradeEl.classList.add('d-none');
+  }
 
   const retakeWrap = document.getElementById('results-retake-wrap');
   const retakeStatus = document.getElementById('results-retake-status');
@@ -882,7 +909,8 @@ async function openAttemptDetail(attemptId) {
     attempt.pointsEarned,
     attempt.totalPoints,
     attempt.results,
-    'history'
+    'history',
+    attempt.grade,
   );
 }
 
@@ -902,6 +930,7 @@ async function openEditExam(exam) {
   document.getElementById('edit-exam-name').textContent = `${exam.name} — Edit Questions`;
   document.getElementById('edit-export-link').href = `/api/exams/${exam.id}/export`;
   document.getElementById('edit-bulk-status').textContent = '';
+  await loadGradeScales();
   await loadEditQuestions();
   showView('editExam');
 }
@@ -942,6 +971,7 @@ function setEditExamControlsEnabled(canEdit) {
   document.getElementById('edit-bonus-window').disabled = !canEdit;
   document.getElementById('edit-keywords').disabled = !canEdit;
   document.getElementById('edit-group-input').disabled = !canEdit;
+  document.getElementById('edit-grade-scale-input').disabled = !canEdit;
   document.getElementById('edit-bulk-upload-input').disabled = !canEdit;
 }
 
@@ -952,6 +982,7 @@ async function loadEditQuestions() {
   document.getElementById('edit-bonus-window').value = data.bonusWindowSeconds;
   document.getElementById('edit-keywords').value = data.keywords || '';
   renderGroupOptions(document.getElementById('edit-group-input'), data.allowedGroupIds);
+  renderGradeScaleOptions(document.getElementById('edit-grade-scale-input'), data.gradeScaleId);
   setEditExamControlsEnabled(editingCanEdit);
   renderEditQuestionList();
 }
@@ -961,11 +992,13 @@ document.getElementById('edit-save-exam-settings').addEventListener('click', asy
   const bonusWindowSeconds = parseInt(document.getElementById('edit-bonus-window').value, 10);
   const keywords = document.getElementById('edit-keywords').value.trim();
   const allowedGroupIds = Array.from(document.getElementById('edit-group-input').selectedOptions).map((o) => Number(o.value));
+  const gradeScaleRaw = document.getElementById('edit-grade-scale-input').value;
+  const gradeScaleId = gradeScaleRaw ? Number(gradeScaleRaw) : null;
   try {
     const result = await api(`/api/exams/${currentExam.id}/settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bonusWindowSeconds, keywords, allowedGroupIds }),
+      body: JSON.stringify({ bonusWindowSeconds, keywords, allowedGroupIds, gradeScaleId }),
     });
     currentExam.keywords = result.keywords;
     status.textContent = 'Saved.';

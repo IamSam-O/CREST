@@ -160,7 +160,10 @@
   <section id="view-results" class="view d-none">
     <div class="card">
       <div class="card-body">
-        <h2 id="results-summary" class="h5"></h2>
+        <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+          <h2 id="results-summary" class="h5 mb-0"></h2>
+          <span id="results-grade" class="badge bg-info text-dark fs-6 d-none"></span>
+        </div>
         <div id="results-retake-wrap" class="d-flex align-items-center gap-2 mb-3 d-none">
           <button id="results-retake-btn" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-repeat me-1"></i>Retake Missed Questions
@@ -244,6 +247,12 @@
           <div>
             <label class="form-label mb-1">Visible to roles/groups <span class="text-muted small">(none = everyone)</span></label>
             <select class="form-select form-select-sm" id="edit-group-input" multiple style="max-width: 20rem;"></select>
+          </div>
+          <div>
+            <label class="form-label mb-1">Grade scale <span class="text-muted small">(optional — assigns a letter grade to final scores)</span></label>
+            <select class="form-select form-select-sm" id="edit-grade-scale-input" style="max-width: 20rem;">
+              <option value="">— None —</option>
+            </select>
           </div>
         </div>
         <div class="mb-3">

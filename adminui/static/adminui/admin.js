@@ -97,24 +97,20 @@ const RESOURCES = {
     ],
   },
   attempts: {
-    label: 'Attempts', url: 'attempts/',
+    label: 'Attempts', url: 'attempts/', readOnly: true,
     columns: [
       { key: 'exam', label: 'Exam', type: 'ref', source: 'exams' },
       { key: 'user', label: 'User', type: 'ref', source: 'users' },
       { key: 'finishedAt', label: 'Finished', type: 'date' },
       { key: 'numCorrect', label: 'Correct' },
       { key: 'numQuestions', label: 'Total' },
+      { key: 'percentCorrect', label: '%', type: 'pct' },
+      { key: 'grade', label: 'Grade' },
       { key: 'pointsEarned', label: 'Points' },
     ],
-    fields: [
-      { key: 'exam', label: 'Exam', type: 'select', source: 'exams', required: true },
-      { key: 'user', label: 'User', type: 'select', source: 'users', required: true },
-      { key: 'startedAt', label: 'Started at (ISO 8601)', type: 'text' },
-      { key: 'numQuestions', label: 'Num questions', type: 'number', default: 0 },
-      { key: 'numCorrect', label: 'Num correct', type: 'number', default: 0 },
-      { key: 'totalPoints', label: 'Total points', type: 'number', default: 0 },
-      { key: 'pointsEarned', label: 'Points earned', type: 'number', default: 0 },
-    ],
+    fields: [],
+    rowActions: [{ label: 'Detail', icon: 'bi-search', action: 'detail' }],
+    headerAction: { label: '<i class="bi bi-download me-1"></i>Export CSV', fn: 'exportAttempts' },
   },
   sessions: {
     label: 'Multiplayer Sessions', url: 'sessions/',
@@ -266,6 +262,7 @@ async function renderSection(key) {
   if (key === 'emailSettings') return renderEmailSettingsSection();
   if (key === 'apiToken') return renderApiTokenSection();
   if (key === 'groups') return renderGroupsSection();
+  if (key === 'gradeScales') return renderGradeScalesSection();
   return renderListSection(key);
 }
 
@@ -273,8 +270,17 @@ async function renderListSection(key, opts = {}) {
   const config = RESOURCES[key];
   document.getElementById('admin-section-title').textContent = config.label;
   const createBtn = document.getElementById('admin-create-btn');
-  createBtn.classList.remove('d-none');
-  createBtn.onclick = () => openFormModal(key, null, opts.extraPayload);
+  createBtn.classList.toggle('d-none', !!config.readOnly);
+  if (!config.readOnly) createBtn.onclick = () => openFormModal(key, null, opts.extraPayload);
+
+  const headerActionBtn = document.getElementById('admin-header-action-btn');
+  if (config.headerAction) {
+    headerActionBtn.innerHTML = config.headerAction.label;
+    headerActionBtn.classList.remove('d-none');
+    headerActionBtn.onclick = null;
+  } else {
+    headerActionBtn.classList.add('d-none');
+  }
 
   const content = document.getElementById('admin-content');
   content.innerHTML = '<p class="text-muted small">Loading…</p>';
@@ -284,6 +290,10 @@ async function renderListSection(key, opts = {}) {
   const items = await api(url);
   content.innerHTML = renderTable(config, items, key, opts);
   wireRowButtons(config, items, key, opts);
+
+  if (config.headerAction && config.headerAction.fn === 'exportAttempts') {
+    headerActionBtn.onclick = () => exportAttemptsCSV(items);
+  }
 }
 
 function renderTable(config, items, key, opts) {
@@ -292,16 +302,22 @@ function renderTable(config, items, key, opts) {
   const rows = items.map((item) => {
     const cells = config.columns.map((c) => `<td>${renderCell(c, item[c.key])}</td>`).join('');
     const rowActions = (config.rowActions || []).map((ra) =>
-      `<button class="btn btn-outline-secondary btn-sm me-1" data-nested="${ra.nested}" data-id="${item.id}" data-label="${escapeHtml(item[ra.parentLabelKey])}">
-        <i class="bi ${ra.icon} me-1"></i>${escapeHtml(ra.label)}
-      </button>`
+      ra.nested
+        ? `<button class="btn btn-outline-secondary btn-sm me-1" data-nested="${ra.nested}" data-id="${item.id}" data-label="${escapeHtml(item[ra.parentLabelKey] || '')}">
+            <i class="bi ${ra.icon} me-1"></i>${escapeHtml(ra.label)}
+           </button>`
+        : `<button class="btn btn-outline-secondary btn-sm me-1" data-row-action="${ra.action}" data-id="${item.id}">
+            <i class="bi ${ra.icon} me-1"></i>${escapeHtml(ra.label)}
+           </button>`
     ).join('');
+    const mutateButtons = config.readOnly ? '' : `
+        <button class="btn btn-primary btn-sm me-1" data-action="edit"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-danger btn-sm" data-action="delete"><i class="bi bi-trash"></i></button>`;
     return `<tr data-id="${item.id}">
       ${cells}
       <td class="text-end text-nowrap">
         ${rowActions}
-        <button class="btn btn-primary btn-sm me-1" data-action="edit"><i class="bi bi-pencil"></i></button>
-        <button class="btn btn-danger btn-sm" data-action="delete"><i class="bi bi-trash"></i></button>
+        ${mutateButtons}
       </td>
     </tr>`;
   }).join('');
@@ -315,6 +331,7 @@ function renderCell(column, value) {
   if (column.type === 'bool') return value ? '<i class="bi bi-check-lg text-success"></i>' : '';
   if (column.type === 'date') return value ? new Date(value).toLocaleString() : '';
   if (column.type === 'ref') return escapeHtml(refLabel(column.source, value));
+  if (column.type === 'pct') return `${value ?? 0}%`;
   return escapeHtml(value);
 }
 
@@ -333,6 +350,12 @@ function wireRowButtons(config, items, key, opts) {
     });
     row.querySelectorAll('[data-nested]').forEach((btn) => {
       btn.addEventListener('click', () => openNestedView(btn.dataset.nested, id, btn.dataset.label, key));
+    });
+    row.querySelectorAll('[data-row-action]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const rowAction = btn.dataset.rowAction;
+        if (rowAction === 'detail') openAttemptDetail(Number(btn.dataset.id), item);
+      });
     });
   });
 }
@@ -386,6 +409,257 @@ function openFormModal(key, item, extraPayload) {
       } else {
         renderSection(activeSection);
       }
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('d-none');
+    }
+  };
+
+  modal.show();
+}
+
+// ---- Attempt detail drill-down ----
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function openAttemptDetail(id, item) {
+  const modalEl = document.getElementById('attempt-detail-modal');
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  const body = document.getElementById('attempt-detail-body');
+  const title = document.getElementById('attempt-detail-title');
+  const exportBtn = document.getElementById('attempt-export-missed-btn');
+  const generateBtn = document.getElementById('attempt-generate-exam-btn');
+
+  title.textContent = 'Loading…';
+  body.innerHTML = '<p class="text-muted">Loading…</p>';
+  exportBtn.classList.add('d-none');
+  generateBtn.classList.add('d-none');
+  exportBtn.onclick = null;
+  generateBtn.onclick = null;
+  modal.show();
+
+  try {
+    const data = await api(`${API}attempts/${id}/drill/`);
+    const missed = data.results.filter((r) => !r.isCorrect);
+    const pctClass = data.percentCorrect >= 70 ? 'bg-success' : 'bg-danger';
+
+    title.textContent = `${data.examName} — ${data.user}`;
+
+    const gradeHtml = data.grade
+      ? `<span class="badge bg-info text-dark">${escapeHtml(data.grade)}</span>` : '';
+    let html = `<div class="d-flex flex-wrap gap-2 mb-4">
+      <span class="badge bg-secondary">${new Date(data.finishedAt).toLocaleString()}</span>
+      <span class="badge bg-primary">${data.numCorrect}/${data.numQuestions} correct</span>
+      <span class="badge ${pctClass}">${data.percentCorrect}%</span>
+      ${gradeHtml}
+      <span class="badge bg-secondary">${data.pointsEarned}/${data.totalPoints} pts</span>
+    </div>`;
+
+    if (!missed.length) {
+      html += '<p class="text-success"><i class="bi bi-check-circle me-1"></i>All questions answered correctly.</p>';
+    } else {
+      html += `<h6 class="mb-3">${missed.length} Missed Question${missed.length !== 1 ? 's' : ''}</h6>`;
+      html += missed.map((r, i) => {
+        const correct = r.options.filter((o) => o.isCorrect);
+        const selected = r.options.filter((o) => r.selectedOptionIds.includes(o.id));
+        const correctHtml = correct.map((o) => DOMPurify.sanitize(o.text)).join(', ');
+        const selectedHtml = selected.length ? selected.map((o) => DOMPurify.sanitize(o.text)).join(', ') : '<em>No answer</em>';
+        return `<div class="card mb-3 border-danger-subtle">
+          <div class="card-body py-2">
+            <p class="mb-2 fw-semibold">${i + 1}. ${DOMPurify.sanitize(r.questionText)}</p>
+            <p class="mb-1 text-success small"><i class="bi bi-check-circle me-1"></i><strong>Correct:</strong> ${correctHtml}</p>
+            <p class="${r.explanation ? 'mb-1' : 'mb-0'} text-danger small"><i class="bi bi-x-circle me-1"></i><strong>Your answer:</strong> ${selectedHtml}</p>
+            ${r.explanation ? `<p class="mb-0 text-muted small"><i class="bi bi-lightbulb me-1"></i>${DOMPurify.sanitize(r.explanation)}</p>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    body.innerHTML = html;
+
+    if (missed.length) {
+      exportBtn.classList.remove('d-none');
+      generateBtn.classList.remove('d-none');
+
+      exportBtn.onclick = async () => {
+        const token = await getToken();
+        const res = await fetch(`${API}attempts/${id}/missed-csv/`, {
+          headers: token ? { Authorization: `Token ${token}` } : {},
+        });
+        if (!res.ok) { alert('Export failed.'); return; }
+        const filename = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || `missed_${id}.csv`;
+        downloadBlob(await res.blob(), filename);
+      };
+
+      generateBtn.onclick = async () => {
+        generateBtn.disabled = true;
+        try {
+          const result = await api(`${API}attempts/${id}/generate-exam/`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+          });
+          modal.hide();
+          alert(`Created "${result.examName}" with ${result.questionCount} question${result.questionCount !== 1 ? 's' : ''}. Find it in your Library.`);
+        } catch (err) {
+          alert(`Failed: ${err.message}`);
+        } finally {
+          generateBtn.disabled = false;
+        }
+      };
+    }
+  } catch (err) {
+    body.innerHTML = `<p class="text-danger">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function exportAttemptsCSV(items) {
+  const headers = ['ID', 'Exam', 'User', 'Finished', 'Correct', 'Total', '%', 'Points Earned', 'Total Points'];
+  const rows = items.map((item) => [
+    item.id,
+    refLabel('exams', item.exam),
+    refLabel('users', item.user),
+    item.finishedAt ? new Date(item.finishedAt).toLocaleString() : '',
+    item.numCorrect,
+    item.numQuestions,
+    `${item.percentCorrect ?? 0}%`,
+    item.pointsEarned,
+    item.totalPoints,
+  ]);
+  const csv = [headers, ...rows]
+    .map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  downloadBlob(new Blob([csv], { type: 'text/csv' }), 'attempts.csv');
+}
+
+// ---- Grade Scales ----
+
+async function renderGradeScalesSection() {
+  document.getElementById('admin-section-title').textContent = 'Grade Scales';
+  document.getElementById('admin-header-action-btn').classList.add('d-none');
+  const createBtn = document.getElementById('admin-create-btn');
+  createBtn.classList.remove('d-none');
+  createBtn.onclick = () => openGradeScaleModal(null);
+
+  const content = document.getElementById('admin-content');
+  content.innerHTML = '<p class="text-muted small">Loading…</p>';
+  const scales = await api(API + 'grade-scales/');
+  if (!scales.length) {
+    content.innerHTML = '<p class="text-muted small mb-0">No grade scales yet. Add one to get started.</p>';
+    return;
+  }
+  content.innerHTML = `<div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr><th>Name</th><th>Entries</th><th></th></tr></thead>
+    <tbody>${scales.map((s) => `
+      <tr data-id="${s.id}">
+        <td>${escapeHtml(s.name)}</td>
+        <td>${(s.entriesJson || []).length}</td>
+        <td class="text-end text-nowrap">
+          <button class="btn btn-primary btn-sm me-1" data-action="edit"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-danger btn-sm" data-action="delete"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+
+  content.querySelectorAll('tr[data-id]').forEach((row) => {
+    const id = Number(row.dataset.id);
+    const scale = scales.find((s) => s.id === id);
+    row.querySelector('[data-action="edit"]').addEventListener('click', () => openGradeScaleModal(scale));
+    row.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (await confirmDelete(`Delete the "${scale.name}" grade scale? Exams using it will no longer have a grade scale assigned.`)) {
+        await api(`${API}grade-scales/${id}/`, { method: 'DELETE' });
+        renderGradeScalesSection();
+      }
+    });
+  });
+}
+
+const GRADE_OPERATORS = ['>=', '<=', '>', '<', '=='];
+
+function addGradeScaleEntryRow(container, value = '', operator = '>=', grade = '') {
+  const row = document.createElement('div');
+  row.className = 'd-flex gap-2 align-items-center gs-entry-row';
+  const opOptions = GRADE_OPERATORS.map((op) =>
+    `<option value="${op}" ${op === operator ? 'selected' : ''}>${op}</option>`
+  ).join('');
+  row.innerHTML = `
+    <input type="number" class="form-control form-control-sm" placeholder="%" min="0" max="100" value="${escapeHtml(String(value))}" style="width:5rem;">
+    <select class="form-select form-select-sm" style="width:5rem;">${opOptions}</select>
+    <input type="text" class="form-control form-control-sm" placeholder="Grade (e.g. A)" value="${escapeHtml(grade)}">
+    <button type="button" class="btn btn-outline-danger btn-sm gs-remove-row" title="Remove"><i class="bi bi-x-lg"></i></button>
+  `;
+  row.querySelector('.gs-remove-row').addEventListener('click', () => row.remove());
+  container.appendChild(row);
+}
+
+async function openGradeScaleModal(scale) {
+  const modalEl = document.getElementById('admin-form-modal');
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  const form = document.getElementById('admin-form');
+  const errorEl = document.getElementById('admin-form-error');
+  errorEl.classList.add('d-none');
+  document.getElementById('admin-form-modal-title').textContent = scale ? 'Edit Grade Scale' : 'Add Grade Scale';
+
+  form.innerHTML = `
+    <div class="mb-3">
+      <label class="form-label">Name</label>
+      <input type="text" class="form-control" id="gs-name" value="${escapeHtml(scale?.name || '')}" required>
+    </div>
+    <label class="form-label">Grade Entries <span class="text-muted small">(minimum % to earn this grade)</span></label>
+    <div id="gs-entries" class="d-flex flex-column gap-2 mb-2"></div>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="gs-add-row">
+      <i class="bi bi-plus-lg me-1"></i>Add Entry
+    </button>
+  `;
+
+  const entriesEl = document.getElementById('gs-entries');
+  const existing = scale?.entriesJson || [];
+  if (existing.length) {
+    existing.forEach((e) => addGradeScaleEntryRow(entriesEl, e.value, e.operator, e.grade));
+  } else {
+    addGradeScaleEntryRow(entriesEl);
+  }
+  document.getElementById('gs-add-row').addEventListener('click', () => addGradeScaleEntryRow(entriesEl));
+
+  const saveBtn = document.getElementById('admin-form-save');
+  saveBtn.onclick = async () => {
+    errorEl.classList.add('d-none');
+    const name = document.getElementById('gs-name').value.trim();
+    if (!name) { errorEl.textContent = 'Name is required.'; errorEl.classList.remove('d-none'); return; }
+
+    const entriesJson = [];
+    for (const row of entriesEl.querySelectorAll('.gs-entry-row')) {
+      const inputs = row.querySelectorAll('input');
+      const selects = row.querySelectorAll('select');
+      const value = inputs[0].value.trim();
+      const operator = selects[0].value;
+      const grade = inputs[1].value.trim();
+      if (!value && !grade) continue;
+      if (!value || !grade) {
+        errorEl.textContent = 'Each entry needs a numeric value and a grade label.';
+        errorEl.classList.remove('d-none');
+        return;
+      }
+      entriesJson.push({ value: Number(value), operator, grade });
+    }
+
+    try {
+      const payload = { name, entriesJson };
+      if (scale) {
+        await api(`${API}grade-scales/${scale.id}/`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+      } else {
+        await api(`${API}grade-scales/`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+      }
+      modal.hide();
+      renderGradeScalesSection();
     } catch (err) {
       errorEl.textContent = err.message;
       errorEl.classList.remove('d-none');

@@ -2,7 +2,7 @@ from django.contrib.auth.models import Group, Permission
 from rest_framework import serializers
 
 from accounts.models import EmailSettings, Invite, User
-from exams.models import AppSettings, Attempt
+from exams.models import AppSettings, Attempt, GradeScale
 from multiplayer.models import MultiplayerParticipant, MultiplayerSession
 
 
@@ -75,13 +75,37 @@ class InviteSerializer(serializers.ModelSerializer):
 
 
 class AttemptSerializer(serializers.ModelSerializer):
+    percent_correct = serializers.SerializerMethodField(read_only=True)
+    grade = serializers.SerializerMethodField(read_only=True)
+
+    def get_percent_correct(self, obj):
+        if not obj.num_questions:
+            return 0
+        return round(obj.num_correct / obj.num_questions * 100)
+
+    def get_grade(self, obj):
+        try:
+            if not obj.exam.grade_scale_id:
+                return None
+            pct = round(obj.num_correct / obj.num_questions * 100) if obj.num_questions else 0
+            return obj.exam.grade_scale.compute_grade(pct)
+        except Exception:
+            return None
+
     class Meta:
         model = Attempt
         fields = [
             'id', 'exam', 'user', 'started_at', 'finished_at',
             'num_questions', 'num_correct', 'total_points', 'points_earned',
+            'percent_correct', 'grade',
         ]
-        read_only_fields = ['finished_at']
+        read_only_fields = ['finished_at', 'percent_correct', 'grade']
+
+
+class GradeScaleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GradeScale
+        fields = ['id', 'name', 'entries_json']
 
 
 class AppSettingsSerializer(serializers.ModelSerializer):
