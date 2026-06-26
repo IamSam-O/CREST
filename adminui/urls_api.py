@@ -8,6 +8,7 @@ router.register('users', viewsets.UserViewSet)
 router.register('groups', viewsets.GroupViewSet)
 router.register('invites', viewsets.InviteViewSet)
 router.register('attempts', viewsets.AttemptViewSet)
+router.register('grade-scales', viewsets.GradeScaleViewSet)
 router.register('sessions', viewsets.MultiplayerSessionViewSet)
 router.register('participants', viewsets.MultiplayerParticipantViewSet, basename='admin-participant')
 

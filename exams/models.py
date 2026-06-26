@@ -4,6 +4,31 @@ from django.db import models
 from django.db.models.functions import Lower
 
 
+_GRADE_OPS = {
+    '==': lambda p, v: p == v,
+    '<':  lambda p, v: p < v,
+    '>':  lambda p, v: p > v,
+    '>=': lambda p, v: p >= v,
+    '<=': lambda p, v: p <= v,
+}
+
+
+class GradeScale(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    # [{value: int, operator: str, grade: str}] — evaluated in order, first match wins
+    entries_json = models.JSONField(default=list)
+
+    def compute_grade(self, percent):
+        for entry in self.entries_json:
+            fn = _GRADE_OPS.get(entry.get('operator', '>='))
+            if fn and fn(percent, entry.get('value', 0)):
+                return entry.get('grade', '')
+        return None
+
+    def __str__(self):
+        return self.name
+
+
 class Exam(models.Model):
     name = models.CharField(max_length=255)
     source_filename = models.CharField(max_length=255, null=True, blank=True)
@@ -19,6 +44,9 @@ class Exam(models.Model):
     # Empty = visible/practicable by everyone (today's behavior). Non-empty
     # restricts visibility to members of these groups, plus the owner and admins.
     allowed_groups = models.ManyToManyField(Group, blank=True, related_name='accessible_exams')
+    grade_scale = models.ForeignKey(
+        GradeScale, on_delete=models.SET_NULL, null=True, blank=True, related_name='exams',
+    )
 
     class Meta:
         constraints = [

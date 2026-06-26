@@ -1,5 +1,10 @@
+import csv
+import io
+
 from django.contrib.auth.models import Group, Permission
+from django.db import transaction
 from django.db.models import F
+from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as rf_serializers, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -8,13 +13,15 @@ from rest_framework.response import Response
 
 from accounts.emails import send_invite_email
 from accounts.models import EmailSettings, Invite, User
-from exams.models import AppSettings, Attempt, Exam
+from exams.csv_io import HEADER, OPTION_COLUMNS
+from exams.models import AppSettings, Attempt, Exam, GradeScale, Option, Question
 from multiplayer.models import MultiplayerParticipant, MultiplayerSession
 
 from .serializers import (
     AppSettingsSerializer,
     AttemptSerializer,
     EmailSettingsSerializer,
+    GradeScaleSerializer,
     GroupSerializer,
     InviteSerializer,
     MultiplayerParticipantSerializer,
@@ -102,9 +109,134 @@ def exam_options_view(request):
     return Response(list(Exam.objects.order_by('name').values('id', 'name')))
 
 
-class AttemptViewSet(viewsets.ModelViewSet):
-    queryset = Attempt.objects.select_related('exam', 'user').order_by('-finished_at')
+class AttemptViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Attempt.objects.select_related('exam', 'exam__grade_scale', 'user').order_by('-finished_at')
     serializer_class = AttemptSerializer
+    permission_classes = [IsAdminUser]
+
+    @action(detail=True, methods=['get'])
+    def drill(self, request, pk=None):
+        attempt = self.get_object()
+        answers = (
+            attempt.answers
+            .select_related('question')
+            .prefetch_related('question__options')
+            .order_by('question__sort_order')
+        )
+        results = []
+        for aa in answers:
+            q = aa.question
+            opts = list(q.options.order_by('sort_order'))
+            results.append({
+                'questionId': q.id,
+                'questionText': q.question_text,
+                'questionType': q.question_type,
+                'isCorrect': aa.is_correct,
+                'pointsAwarded': aa.points_awarded,
+                'points': q.points,
+                'selectedOptionIds': aa.selected_option_ids,
+                'explanation': q.explanation,
+                'options': [{'id': o.id, 'text': o.option_text, 'isCorrect': o.is_correct} for o in opts],
+            })
+        pct = round(attempt.num_correct / attempt.num_questions * 100) if attempt.num_questions else 0
+        grade = None
+        if attempt.exam.grade_scale_id:
+            grade = attempt.exam.grade_scale.compute_grade(pct)
+        return Response({
+            'id': attempt.id,
+            'examName': attempt.exam.name,
+            'user': attempt.user.username,
+            'finishedAt': attempt.finished_at,
+            'numQuestions': attempt.num_questions,
+            'numCorrect': attempt.num_correct,
+            'totalPoints': attempt.total_points,
+            'pointsEarned': attempt.points_earned,
+            'percentCorrect': pct,
+            'grade': grade,
+            'results': results,
+        })
+
+    @action(detail=True, methods=['get'], url_path='missed-csv')
+    def missed_csv(self, request, pk=None):
+        attempt = self.get_object()
+        wrong = (
+            attempt.answers
+            .filter(is_correct=False)
+            .select_related('question')
+            .prefetch_related('question__options')
+            .order_by('question__sort_order')
+        )
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(HEADER)
+        for aa in wrong:
+            q = aa.question
+            opts = list(q.options.order_by('sort_order'))
+            correct_indexes = ','.join(str(i + 1) for i, o in enumerate(opts) if o.is_correct)
+            option_cells = [opts[i].option_text if i < len(opts) else '' for i in range(len(OPTION_COLUMNS))]
+            writer.writerow([
+                q.question_text,
+                'Checkbox' if q.question_type == Question.MULTI else 'Multiple Choice',
+                *option_cells,
+                correct_indexes,
+                q.points,
+                q.image_link or '',
+                q.explanation or '',
+            ])
+        safe_name = ''.join(c if c.isalnum() or c in '_-' else '_' for c in attempt.exam.name)
+        response = HttpResponse(buf.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="missed_{safe_name}_{attempt.id}.csv"'
+        return response
+
+    @action(detail=True, methods=['post'], url_path='generate-exam')
+    def generate_exam(self, request, pk=None):
+        attempt = self.get_object()
+        wrong = (
+            attempt.answers
+            .filter(is_correct=False)
+            .select_related('question')
+            .prefetch_related('question__options')
+            .order_by('question__sort_order')
+        )
+        if not wrong.exists():
+            return Response({'error': 'No missed questions to generate an exam from.'}, status=400)
+
+        base_name = request.data.get('name') or f'Missed Questions – {attempt.exam.name}'
+        name = base_name
+        suffix = 2
+        while Exam.objects.filter(name__iexact=name).exists():
+            name = f'{base_name} ({suffix})'
+            suffix += 1
+
+        with transaction.atomic():
+            exam = Exam.objects.create(name=name, owner=request.user)
+            for idx, aa in enumerate(wrong):
+                q = aa.question
+                new_q = Question.objects.create(
+                    exam=exam,
+                    question_text=q.question_text,
+                    question_type=q.question_type,
+                    points=q.points,
+                    image_link=q.image_link,
+                    explanation=q.explanation,
+                    sort_order=idx,
+                )
+                Option.objects.bulk_create([
+                    Option(
+                        question=new_q,
+                        option_text=o.option_text,
+                        is_correct=o.is_correct,
+                        sort_order=o.sort_order,
+                    )
+                    for o in q.options.order_by('sort_order')
+                ])
+
+        return Response({'examId': exam.id, 'examName': exam.name, 'questionCount': idx + 1}, status=201)
+
+
+class GradeScaleViewSet(viewsets.ModelViewSet):
+    queryset = GradeScale.objects.order_by('name')
+    serializer_class = GradeScaleSerializer
     permission_classes = [IsAdminUser]
 
 

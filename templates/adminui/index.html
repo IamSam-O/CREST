@@ -23,6 +23,7 @@
         <div class="text-muted small text-uppercase fw-bold mb-1 px-1">Manage</div>
         <div class="list-group">
           <button class="list-group-item list-group-item-action" data-section="attempts"><i class="bi bi-bar-chart me-2"></i>Attempts</button>
+          <button class="list-group-item list-group-item-action" data-section="gradeScales"><i class="bi bi-patch-check me-2"></i>Grade Scales</button>
           <button class="list-group-item list-group-item-action" data-section="sessions"><i class="bi bi-people-fill me-2"></i>Multiplayer Sessions</button>
           <button class="list-group-item list-group-item-action" data-section="appSettings"><i class="bi bi-toggles me-2"></i>App Settings</button>
           <button class="list-group-item list-group-item-action" data-section="users"><i class="bi bi-people me-2"></i>Users</button>
@@ -45,7 +46,10 @@
         <div class="card-body p-4">
           <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 id="admin-section-title" class="h5 mb-0"></h2>
-            <button id="admin-create-btn" class="btn btn-primary btn-sm d-none"><i class="bi bi-plus-lg me-1"></i>Add</button>
+            <div class="d-flex gap-2">
+              <button id="admin-header-action-btn" class="btn btn-outline-secondary btn-sm d-none"></button>
+              <button id="admin-create-btn" class="btn btn-primary btn-sm d-none"><i class="bi bi-plus-lg me-1"></i>Add</button>
+            </div>
           </div>
           <div id="admin-content"></div>
         </div>
@@ -69,6 +73,30 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-primary" id="admin-form-save">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Attempt detail modal -->
+<div class="modal fade" id="attempt-detail-modal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="attempt-detail-title">Attempt Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="attempt-detail-body">
+        <p class="text-muted">Loading…</p>
+      </div>
+      <div class="modal-footer flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-secondary d-none" id="attempt-export-missed-btn">
+          <i class="bi bi-download me-1"></i>Export Missed CSV
+        </button>
+        <button type="button" class="btn btn-primary d-none" id="attempt-generate-exam-btn">
+          <i class="bi bi-file-earmark-plus me-1"></i>Generate Missed Exam
+        </button>
       </div>
     </div>
   </div>

@@ -21,7 +21,7 @@ from accounts.authentication import CsrfExemptSessionAuthentication
 from accounts.permissions import NoTokenAuthOnGameplay
 
 from .csv_io import CsvImportError, export_exam_to_csv, import_csv, replace_exam_questions
-from .models import AppSettings, Attempt, AttemptAnswer, Exam, InProgressAttempt, Option, Question
+from .models import AppSettings, Attempt, AttemptAnswer, Exam, GradeScale, InProgressAttempt, Option, Question
 from .sanitize import sanitize_html
 
 
@@ -211,7 +211,13 @@ def exam_settings(request, exam_id):
 
     exam.bonus_window_seconds = bonus_window_seconds
     exam.keywords = keywords
-    exam.save(update_fields=['bonus_window_seconds', 'keywords'])
+
+    grade_scale_id = request.data.get('grade_scale_id')
+    if grade_scale_id is not None:
+        exam.grade_scale_id = int(grade_scale_id) if grade_scale_id else None
+
+    update_fields = ['bonus_window_seconds', 'keywords', 'grade_scale']
+    exam.save(update_fields=update_fields)
 
     allowed_group_ids = request.data.get('allowed_group_ids')
     if isinstance(allowed_group_ids, list):
@@ -221,6 +227,7 @@ def exam_settings(request, exam_id):
         'bonus_window_seconds': bonus_window_seconds,
         'keywords': keywords,
         'allowed_group_ids': list(exam.allowed_groups.values_list('id', flat=True)),
+        'grade_scale_id': exam.grade_scale_id,
     })
 
 
@@ -276,6 +283,21 @@ def group_list(request):
     multiselect - any authenticated user can see group names to share an
     exam with, same as picking a name out of an address book."""
     return Response(list(Group.objects.order_by('name').values('id', 'name')))
+
+
+@extend_schema(
+    tags=['Exams'], summary='List grade scales',
+    description='Returns id, name, and entries for all grade scales. Used to populate the grade scale selector in exam settings.',
+    responses={200: inline_serializer('GradeScaleOption', fields={
+        'id': rf_serializers.IntegerField(),
+        'name': rf_serializers.CharField(),
+        'entries_json': rf_serializers.ListField(child=rf_serializers.DictField()),
+    }, many=True)},
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def grade_scale_list(request):
+    return Response(list(GradeScale.objects.order_by('name').values('id', 'name', 'entries_json')))
 
 
 # ---- Global settings ----
@@ -416,6 +438,7 @@ def exam_questions(request, exam_id):
             'bonus_window_seconds': exam.bonus_window_seconds,
             'keywords': exam.keywords,
             'allowed_group_ids': list(exam.allowed_groups.values_list('id', flat=True)),
+            'grade_scale_id': exam.grade_scale_id,
             'can_edit': _can_edit_exam(request.user, exam),
             'questions': questions,
         })
@@ -640,7 +663,7 @@ def question_check(request, question_id):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([IsAuthenticated, NoTokenAuthOnGameplay])
 def exam_submit(request, exam_id):
-    exam = get_object_or_404(Exam, id=exam_id)
+    exam = get_object_or_404(Exam.objects.select_related('grade_scale'), id=exam_id)
     _require_exam_access(request, exam)
     answers = request.data.get('answers')
     if not isinstance(answers, list) or not answers:
@@ -710,6 +733,11 @@ def exam_submit(request, exam_id):
             for r in results
         ])
 
+    grade = None
+    if exam.grade_scale_id:
+        pct = round(num_correct / len(answers) * 100) if answers else 0
+        grade = exam.grade_scale.compute_grade(pct)
+
     return Response({
         'attempt_id': attempt.id,
         'exam_id': exam.id,
@@ -718,6 +746,7 @@ def exam_submit(request, exam_id):
         'num_correct': num_correct,
         'total_points': total_points,
         'points_earned': points_earned,
+        'grade': grade,
         'results': results,
     })
 
@@ -758,7 +787,7 @@ def exam_attempts(request, exam_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def attempt_detail(request, attempt_id):
-    attempt = get_object_or_404(Attempt, id=attempt_id)
+    attempt = get_object_or_404(Attempt.objects.select_related('exam__grade_scale'), id=attempt_id)
     if attempt.user_id != request.user.id and not request.user.has_perm('exams.view_attempt'):
         raise exceptions.PermissionDenied('Missing permission: exams.view_attempt')
 
@@ -779,6 +808,11 @@ def attempt_detail(request, attempt_id):
             'options': [{'id': o.id, 'text': o.option_text, 'is_correct': o.is_correct} for o in options],
         })
 
+    grade = None
+    if attempt.exam.grade_scale_id:
+        pct = round(attempt.num_correct / attempt.num_questions * 100) if attempt.num_questions else 0
+        grade = attempt.exam.grade_scale.compute_grade(pct)
+
     return Response({
         'id': attempt.id,
         'exam_id': attempt.exam_id,
@@ -788,5 +822,6 @@ def attempt_detail(request, attempt_id):
         'num_correct': attempt.num_correct,
         'total_points': attempt.total_points,
         'points_earned': attempt.points_earned,
+        'grade': grade,
         'results': results,
     })

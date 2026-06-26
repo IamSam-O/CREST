@@ -18,4 +18,5 @@ urlpatterns = [
     path('questions/<int:question_id>/check', views.question_check),
     path('settings', views.app_settings),
     path('groups', views.group_list),
+    path('grade-scales', views.grade_scale_list),
 ]
