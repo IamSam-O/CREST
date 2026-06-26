@@ -1,3 +1,4 @@
+import uuid
 import django.db.models.deletion
 import multiplayer.models
 import secrets
@@ -18,7 +19,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='MultiplayerSession',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, serialize=False)),
                 ('room_code', models.CharField(default=multiplayer.models._generate_room_code, max_length=12, unique=True)),
                 ('passcode', models.CharField(default=multiplayer.models._generate_passcode, max_length=12)),
                 ('host_secret', models.CharField(default=secrets.token_urlsafe, max_length=64, unique=True)),
@@ -38,7 +39,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='MultiplayerParticipant',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, serialize=False)),
                 ('client_id', models.CharField(max_length=64)),
                 ('display_name', models.CharField(max_length=64)),
                 ('score', models.IntegerField(default=0)),

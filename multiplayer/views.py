@@ -9,7 +9,7 @@ from exams.models import AppSettings, Exam
 from .models import MultiplayerSession
 
 
-NAV_LINKS = [{'url': '/', 'icon': 'bi-house-door', 'label': 'Library'}]
+NAV_LINKS = [{'url': '/', 'icon': 'bi-house-door', 'label': 'Home'}]
 
 
 @login_required

@@ -7,7 +7,8 @@ router = DefaultRouter()
 router.register('users', viewsets.UserViewSet)
 router.register('groups', viewsets.GroupViewSet)
 router.register('invites', viewsets.InviteViewSet)
-router.register('attempts', viewsets.AttemptViewSet, basename='attempt')
+router.register('instances', viewsets.ExamInstanceViewSet, basename='instance')
+router.register('banks', viewsets.QuestionBankViewSet, basename='bank')
 router.register('grade-scales', viewsets.GradeScaleViewSet)
 router.register('sessions', viewsets.MultiplayerSessionViewSet)
 router.register('participants', viewsets.MultiplayerParticipantViewSet, basename='admin-participant')
@@ -17,5 +18,6 @@ urlpatterns = [
     path('email-settings/', viewsets.email_settings_view),
     path('whoami/', viewsets.whoami_view),
     path('exams/', viewsets.exam_options_view),
+    path('bank-options/', viewsets.bank_options_view),
     path('', include(router.urls)),
 ]

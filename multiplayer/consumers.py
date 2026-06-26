@@ -102,7 +102,7 @@ class MultiplayerConsumer(JsonWebsocketConsumer):
 
     def handle_start(self, content):
         session = self._require_host()
-        questions = list(session.exam.questions.order_by('sort_order'))
+        questions = session.exam.sample_questions()
         if not questions:
             raise ValueError('This exam has no questions.')
         random.shuffle(questions)

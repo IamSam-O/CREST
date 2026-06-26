@@ -3,15 +3,23 @@ import io
 
 from django.db import transaction
 
-from .models import Exam, InProgressAttempt, Option, Question
+from .models import InProgressInstance, Option, Question, QuestionBank
 from .sanitize import sanitize_html
 
 OPTION_COLUMNS = ['Option 1', 'Option 2', 'Option 3', 'Option 4', 'Option 5', 'Option 6']
-HEADER = ['Question Text', 'Question Type', *OPTION_COLUMNS, 'Correct Answer', 'Points', 'Image Link', 'Answer explanation']
+HEADER = ['Question Text', 'Question Type', 'Category', *OPTION_COLUMNS, 'Correct Answer', 'Points', 'Image Link', 'Answer explanation']
 
 
 class CsvImportError(Exception):
     pass
+
+
+def decode_csv_upload(upload):
+    raw = upload.read()
+    try:
+        return raw.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        return raw.decode('latin-1')
 
 
 def _detect_type(raw_type, correct_answer):
@@ -56,35 +64,31 @@ def parse_rows(csv_text):
         except ValueError:
             points = 0
         points = points if points > 0 else 1
-        image_link = (row.get('Image Link') or '').strip() or None
-        explanation = (row.get('Answer explanation') or '').strip() or None
-
-        options = []
-        for col_idx, col in enumerate(OPTION_COLUMNS):
-            text = (row.get(col) or '').strip()
-            if not text:
-                continue
-            options.append({'text': text, 'is_correct': (col_idx + 1) in correct_indexes})
 
         rows.append({
             'question_text': question_text,
             'type': question_type,
             'points': points,
-            'image_link': image_link,
-            'explanation': explanation,
-            'options': options,
+            'image_link': (row.get('Image Link') or '').strip() or None,
+            'explanation': (row.get('Answer explanation') or '').strip() or None,
+            'category': (row.get('Category') or '').strip(),
+            'options': [
+                {'text': text, 'is_correct': (col_idx + 1) in correct_indexes}
+                for col_idx, col in enumerate(OPTION_COLUMNS)
+                if (text := (row.get(col) or '').strip())
+            ],
         })
 
     if not rows:
         raise CsvImportError('No valid question rows found in CSV.')
-
     return rows
 
 
-def _insert_questions(exam, rows, sanitize=True):
+def _insert_questions(bank, rows, sanitize=True):
     for idx, row in enumerate(rows):
         question = Question.objects.create(
-            exam=exam,
+            bank=bank,
+            category=row.get('category', ''),
             question_text=sanitize_html(row['question_text']) if sanitize else row['question_text'],
             question_type=row['type'],
             points=row['points'],
@@ -104,39 +108,36 @@ def _insert_questions(exam, rows, sanitize=True):
 
 
 @transaction.atomic
-def import_csv(csv_text, exam_name, source_filename=None, owner=None, group_ids=None):
+def import_csv(csv_text, bank_name, source_filename=None, owner=None):
     rows = parse_rows(csv_text)
-    exam = Exam.objects.create(name=exam_name, source_filename=source_filename, owner=owner)
-    if group_ids:
-        exam.allowed_groups.set(group_ids)
-    _insert_questions(exam, rows)
-    return exam.id, len(rows)
+    bank = QuestionBank.objects.create(name=bank_name, source_filename=source_filename, owner=owner)
+    _insert_questions(bank, rows)
+    return bank.id, len(rows)
 
 
 @transaction.atomic
-def replace_exam_questions(exam, csv_text):
-    """Wholesale-replaces an existing exam's questions (CSV re-upload).
-    Old questions cascade-delete their options and any historical
-    attempt_answers rows; the in-progress attempt for this exam is also
-    cleared by the caller since its saved question ids would go stale."""
+def replace_bank_questions(bank, csv_text):
+    """Wholesale-replace a bank's questions. Clears in-progress instances for all exams
+    sourced from this bank since their saved question IDs go stale."""
     rows = parse_rows(csv_text)
-    exam.questions.all().delete()
-    _insert_questions(exam, rows)
-    InProgressAttempt.objects.filter(exam=exam).delete()
+    bank.questions.all().delete()
+    _insert_questions(bank, rows)
+    InProgressInstance.objects.filter(exam__question_bank=bank).delete()
     return len(rows)
 
 
-def export_exam_to_csv(exam):
+def export_bank_to_csv(bank):
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(HEADER)
-    for question in exam.questions.order_by('sort_order').prefetch_related('options'):
+    for question in bank.questions.order_by('sort_order').prefetch_related('options'):
         options = list(question.options.order_by('sort_order'))
         correct_indexes = ','.join(str(i + 1) for i, o in enumerate(options) if o.is_correct)
         option_cells = [options[i].option_text if i < len(options) else '' for i in range(len(OPTION_COLUMNS))]
         writer.writerow([
             question.question_text,
             'Checkbox' if question.question_type == Question.MULTI else 'Multiple Choice',
+            question.category,
             *option_cells,
             correct_indexes,
             question.points,

@@ -41,7 +41,6 @@
           </select>
         </div>
         <div class="d-flex gap-2">
-          <a href="/" class="btn btn-secondary">Back</a>
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-play-fill me-1"></i>Create Room
           </button>
@@ -55,13 +54,19 @@
 <script>
   const saved = JSON.parse(localStorage.getItem('mp_host_session') || 'null');
   if (saved) {
-    document.getElementById('resume-banner').classList.remove('d-none');
-    document.getElementById('resume-link').href = saved.url;
-    document.getElementById('resume-exam-name').textContent = saved.examName || '';
     document.getElementById('resume-dismiss').onclick = () => {
       localStorage.removeItem('mp_host_session');
       document.getElementById('resume-banner').classList.add('d-none');
     };
+    fetch(saved.url, { method: 'HEAD' }).then(r => {
+      if (r.ok) {
+        document.getElementById('resume-banner').classList.remove('d-none');
+        document.getElementById('resume-link').href = saved.url;
+        document.getElementById('resume-exam-name').textContent = saved.examName || '';
+      } else {
+        localStorage.removeItem('mp_host_session');
+      }
+    }).catch(() => localStorage.removeItem('mp_host_session'));
   }
 </script>
 </body>

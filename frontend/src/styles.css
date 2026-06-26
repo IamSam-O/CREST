@@ -1,0 +1,714 @@
+:root {
+  --bg-deep: #0b1320;
+  --bg-glow: #15324a;
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-hover: rgba(255, 255, 255, 0.1);
+  --surface-border: rgba(255, 255, 255, 0.12);
+  --text: #f3f6f8;
+  --text-muted: rgba(243, 246, 248, 0.7);
+  --accent-primary: #1f7a8c;
+  --accent-primary-dark: #14505c;
+  --accent-secondary: #f5a623;
+  --accent-secondary-dark: #d4870f;
+  --on-accent: #2a1605;
+  --input-bg: rgba(255, 255, 255, 0.07);
+  --input-bg-focus: rgba(255, 255, 255, 0.12);
+  --check-bg: rgba(255, 255, 255, 0.1);
+  --check-border: rgba(255, 255, 255, 0.35);
+  --outline-border: rgba(255, 255, 255, 0.3);
+  --outline-border-hover: rgba(255, 255, 255, 0.4);
+  --list-item-bg: rgba(255, 255, 255, 0.05);
+  --placeholder: rgba(245, 243, 248, 0.4);
+  --track-bg: rgba(255, 255, 255, 0.12);
+}
+
+body.theme-light {
+  --bg-deep: #dcebee;
+  --bg-glow: #ffffff;
+  --surface: rgba(11, 19, 32, 0.04);
+  --surface-hover: rgba(11, 19, 32, 0.08);
+  --surface-border: rgba(11, 19, 32, 0.14);
+  --text: #0b1320;
+  --text-muted: rgba(11, 19, 32, 0.65);
+  --input-bg: rgba(11, 19, 32, 0.05);
+  --input-bg-focus: rgba(11, 19, 32, 0.08);
+  --check-bg: rgba(11, 19, 32, 0.06);
+  --check-border: rgba(11, 19, 32, 0.3);
+  --outline-border: rgba(11, 19, 32, 0.25);
+  --outline-border-hover: rgba(11, 19, 32, 0.35);
+  --list-item-bg: rgba(11, 19, 32, 0.03);
+  --placeholder: rgba(11, 19, 32, 0.4);
+  --track-bg: rgba(11, 19, 32, 0.12);
+}
+
+html,
+body {
+  min-height: 100vh;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at top left, var(--bg-glow), var(--bg-deep) 100%) fixed;
+  font-family: 'Nunito', 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--text);
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-top: 1rem;
+}
+
+/* A few percent wider than Bootstrap's default container max-width so a 6-option question's
+   tile row has room to breathe instead of feeling cramped on the Take Exam screen. */
+@media (min-width: 1200px) {
+  main.container {
+    max-width: 1280px;
+  }
+}
+
+.navbar {
+  /* Fixed dark gradient regardless of theme so navbar-dark's white text stays legible. */
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-dark));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.navbar-brand {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Navbar background is a fixed dark gradient in both themes, so its buttons stay fixed-light too. */
+.navbar .btn-outline-secondary {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.navbar .btn-outline-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 0.9rem;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+  color: var(--text);
+}
+
+.card-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+h2,
+h3 {
+  color: var(--text);
+}
+
+.text-muted {
+  color: var(--text-muted) !important;
+}
+
+.btn {
+  border-radius: 0.5rem;
+  font-weight: 500;
+}
+
+.btn-primary {
+  background-color: var(--accent-secondary);
+  border-color: var(--accent-secondary);
+  color: var(--on-accent);
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-secondary-dark);
+  border-color: var(--accent-secondary-dark);
+  color: var(--on-accent);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  border-color: var(--surface-border);
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-hover);
+  border-color: var(--outline-border);
+  color: var(--text);
+}
+
+.btn-outline-secondary {
+  color: var(--text);
+  border-color: var(--outline-border);
+  border-radius: 0.5rem;
+}
+
+.btn-outline-secondary:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--outline-border-hover);
+}
+
+.btn.btn-danger {
+  background-color: #ff7b7b !important;
+  border-color: #ff7b7b !important;
+  color: #1a1a2e !important;
+}
+
+.btn.btn-danger:hover {
+  background-color: #e86060 !important;
+  border-color: #e86060 !important;
+  color: #1a1a2e !important;
+}
+
+.btn-outline-danger {
+  color: #ff7b7b;
+  border-color: #ff7b7b;
+  border-radius: 0.5rem;
+}
+
+.btn-outline-danger:hover {
+  background: #ff7b7b;
+  color: var(--on-accent);
+}
+
+.form-control,
+.form-select {
+  background: var(--input-bg);
+  border: 1px solid var(--surface-border);
+  color: var(--text);
+}
+
+.form-control::placeholder {
+  color: var(--placeholder);
+}
+
+.form-control:focus,
+.form-select:focus {
+  background: var(--input-bg-focus);
+  border-color: var(--accent-primary);
+  color: var(--text);
+  box-shadow: 0 0 0 0.2rem rgba(31, 122, 140, 0.25);
+}
+
+/* Select option dropdown rows — browser defaults ignore CSS vars, force them explicitly */
+select option {
+  background: var(--bg-deep);
+  color: var(--text);
+}
+
+/* Bootstrap table overrides */
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--text);
+  --bs-table-border-color: var(--surface-border);
+  --bs-table-striped-bg: var(--surface-hover);
+  --bs-table-hover-bg: var(--surface-hover);
+  color: var(--text);
+}
+
+.table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  border-color: var(--surface-border);
+}
+
+.table td {
+  border-color: var(--surface-border);
+}
+
+.form-check-input {
+  background-color: var(--check-bg);
+  border-color: var(--check-border);
+}
+
+.form-check-input:checked {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.form-label {
+  color: var(--text-muted);
+}
+
+.help-icon {
+  cursor: help;
+  margin-left: 0.25rem;
+  font-size: 0.85em;
+}
+
+.form-text {
+  color: var(--text-muted);
+}
+
+.quill-editor .ql-toolbar.ql-snow {
+  background: var(--input-bg);
+  border: 1px solid var(--surface-border);
+  border-bottom: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.quill-editor .ql-container.ql-snow {
+  background: var(--input-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: 0 0 0.5rem 0.5rem;
+  color: var(--text);
+}
+
+.quill-editor .ql-editor.ql-blank::before {
+  color: var(--placeholder);
+}
+
+.quill-editor .ql-stroke {
+  stroke: var(--text-muted) !important;
+}
+
+.quill-editor .ql-fill {
+  fill: var(--text-muted) !important;
+}
+
+.quill-editor .ql-picker-label {
+  color: var(--text-muted) !important;
+}
+
+.quill-editor .ql-picker-options {
+  background: var(--bg-deep);
+  border-color: var(--surface-border) !important;
+}
+
+.quill-editor-option .ql-editor {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.modal-content {
+  --bs-modal-bg: var(--bg-deep);
+  --bs-modal-color: var(--text);
+  --bs-modal-header-border-color: var(--surface-border);
+  --bs-modal-footer-border-color: var(--surface-border);
+  border: 1px solid var(--surface-border);
+}
+
+.progress {
+  border-radius: 999px;
+  background-color: var(--track-bg);
+}
+
+.progress-bar {
+  background-color: var(--accent-primary);
+}
+
+.badge {
+  border-radius: 999px;
+  font-weight: 600;
+  padding: 0.4em 0.7em;
+}
+
+/* Fixed-size pill so the points badge stays a consistent shape regardless of digit count
+   (a plain .badge auto-sizes to its text, making +0 pts vs +150 pts visibly different sizes). */
+.points-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.question-image {
+  max-height: 320px;
+  object-fit: contain;
+}
+
+/* Library / history entries rendered as flat cards */
+.entry-card {
+  border: 1px solid var(--surface-border);
+  border-radius: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  background: var(--surface);
+  color: var(--text);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.entry-card:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  border-color: var(--outline-border);
+  background: var(--surface-hover);
+}
+
+.entry-card.clickable {
+  cursor: pointer;
+}
+
+.entry-meta strong {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Bootstrap alert theming */
+.alert {
+  --bs-alert-bg: var(--surface);
+  --bs-alert-border-color: var(--surface-border);
+  --bs-alert-color: var(--text);
+}
+
+.alert-danger {
+  --bs-alert-bg: rgba(220, 53, 69, 0.15);
+  --bs-alert-border-color: rgba(220, 53, 69, 0.3);
+  --bs-alert-color: #ff7b7b;
+}
+
+.alert-success {
+  --bs-alert-bg: rgba(25, 135, 84, 0.15);
+  --bs-alert-border-color: rgba(25, 135, 84, 0.3);
+  --bs-alert-color: #6fcf97;
+}
+
+/* Input-group addon theming */
+.input-group-text {
+  background: var(--input-bg);
+  border-color: var(--surface-border);
+  color: var(--text-muted);
+}
+
+/* Dropdown theming */
+.dropdown-menu {
+  background: var(--bg-deep);
+  border-color: var(--surface-border);
+}
+
+.dropdown-item {
+  color: var(--text);
+}
+
+.dropdown-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* Bootstrap subtle border/bg helpers used in admin detail cards */
+.border-danger-subtle { border-color: rgba(220, 53, 69, 0.35) !important; }
+.border-success-subtle { border-color: rgba(25, 135, 84, 0.35) !important; }
+.border-warning-subtle { border-color: rgba(255, 193, 7, 0.35) !important; }
+
+/* Ensure cards inside modals/admin also use surface background */
+.modal-body .card {
+  background: var(--surface);
+  border-color: var(--surface-border);
+  color: var(--text);
+}
+
+.list-group-item {
+  background: var(--list-item-bg);
+  border-color: var(--surface-border);
+  color: var(--text);
+}
+
+.list-group-item-action:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.list-group-item.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+
+.qe-option-row .form-control {
+  border-radius: 0.5rem;
+}
+
+/* ---- Take Exam: Kahoot-style game screen ---- */
+
+#view-take,
+.quiz-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 0.5rem 2.5rem;
+}
+
+@media (min-width: 992px) {
+  #view-take,
+  .quiz-screen {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    padding-left: clamp(2rem, 5vw, 5rem);
+    padding-right: clamp(2rem, 5vw, 5rem);
+  }
+}
+
+.pill-badge {
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.4rem 0.95rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.bonus-meter-wrap {
+  max-width: 360px;
+  margin: 0 auto 2rem;
+}
+
+.bonus-meter-label {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+#take-bonus-bar {
+  background-color: var(--accent-secondary);
+  transition: width 0.2s linear, background-color 0.3s ease;
+}
+
+#take-bonus-bar.bg-danger {
+  background-color: #ff4d4f !important;
+}
+
+.question-banner-wrap {
+  position: relative;
+  width: fit-content;
+  max-width: min(100%, 1400px);
+  min-width: 60%;
+  align-self: center;
+  margin: 0 auto 2rem;
+}
+
+.qnum-pill {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  background: rgba(8, 16, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--accent-secondary);
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.question-banner {
+  background: rgba(8, 16, 26, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 0.5rem;
+  padding: 1.5rem 1.75rem;
+  text-align: center;
+}
+
+.question-banner h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.5;
+  margin: 0;
+  color: #fff;
+}
+
+.select-hint {
+  color: var(--accent-secondary);
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+
+/* --accent-secondary is too light to read as plain text on a white page (it stays bright
+   because it also has to work as a button background, where contrast is fine). */
+body.theme-light .select-hint {
+  color: #8a570a;
+}
+
+.tile-grid {
+  /* grid-template-columns is set inline per-question (one column per option) so all
+     answers stay on a single row and resize fluidly with the viewport. */
+  display: grid;
+  grid-auto-rows: auto;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+
+.answer-tile {
+  border: none;
+  border-radius: 0.65rem;
+  padding: 1.5rem 2rem;
+  font-weight: 600;
+  font-size: max(1.3rem, calc(1.75rem - var(--tile-font-scale, 0) * 0.45rem));
+  line-height: 1.4;
+  letter-spacing: 0;
+  color: #fff;
+  text-align: center;
+  cursor: pointer;
+  height: 100%;
+  min-height: 140px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s ease, box-shadow 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
+}
+
+.answer-tile-label {
+  width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* Quill outputs <p> wrappers — strip margins in constrained display contexts */
+.answer-tile-label p,
+.answer-tile-label ul,
+.answer-tile-label ol,
+.question-banner h2 p,
+.question-banner h2 ul,
+.question-banner h2 ol,
+.feedback-banner p,
+.feedback-banner ul,
+.feedback-banner ol { margin: 0; }
+
+.answer-tile-label p + p,
+.question-banner h2 p + p { margin-top: 0.3em; }
+
+.answer-tile:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+}
+
+.answer-tile.selected {
+  outline: 5px solid #fff;
+  outline-offset: -5px;
+  filter: brightness(1.35);
+  transform: translateY(-4px) scale(1.03);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+.answer-tile:disabled {
+  cursor: default;
+}
+
+.answer-tile:disabled:not(.correct):not(.incorrect-selected) {
+  opacity: 0.45;
+}
+
+.answer-tile.correct {
+  outline: 4px solid #2ecc71;
+  outline-offset: -4px;
+}
+
+.answer-tile.incorrect-selected {
+  outline: 4px solid #ff4d4f;
+  outline-offset: -4px;
+}
+
+.tile-color-0 {
+  background: linear-gradient(135deg, #d6555f, #a8283a);
+}
+
+.tile-color-1 {
+  background: linear-gradient(135deg, #5577d9, #2d4a9b);
+}
+
+.tile-color-2 {
+  background: linear-gradient(135deg, #3fae74, #1f7a52);
+}
+
+.tile-color-3 {
+  background: linear-gradient(135deg, #e3a23e, #b97a1a);
+}
+
+.tile-color-4 {
+  background: linear-gradient(135deg, #9a63c4, #6b3a92);
+}
+
+.tile-color-5 {
+  background: linear-gradient(135deg, #3fb0b5, #1f7478);
+}
+
+.feedback-banner {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  text-align: center;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.feedback-banner.correct {
+  color: #2ecc71;
+}
+
+.feedback-banner.incorrect {
+  color: #ff6b6b;
+}
+
+#view-take .d-flex.flex-wrap.mt-3 {
+  margin-top: 1.5rem !important;
+  gap: 0.75rem !important;
+}
+
+/* Tablets (iPad portrait/landscape and similar) — between phone and desktop sizing. */
+@media (min-width: 577px) and (max-width: 991px) {
+  .question-banner h2 {
+    font-size: 1.3rem;
+  }
+
+  .tile-grid {
+    min-height: 220px;
+  }
+
+  .answer-tile {
+    font-size: max(1.15rem, calc(1.5rem - var(--tile-font-scale, 0) * 0.35rem));
+    padding: 1.25rem 1.5rem;
+    min-height: 125px;
+  }
+}
+
+@media (max-width: 576px) {
+  .question-banner h2 {
+    font-size: 1.15rem;
+  }
+
+  .qnum-pill,
+  .pill-badge {
+    font-size: 0.75rem;
+  }
+
+  .tile-grid {
+    /* Override the per-question inline column count — phones always stack vertically. */
+    grid-template-columns: 1fr !important;
+    min-height: 200px;
+  }
+
+  .answer-tile {
+    font-size: max(1.15rem, calc(1.25rem - var(--tile-font-scale, 0) * 0.1rem));
+    padding: 1.1rem 1.25rem;
+    min-height: 110px;
+  }
+}

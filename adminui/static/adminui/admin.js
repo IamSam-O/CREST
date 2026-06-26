@@ -92,8 +92,8 @@ const RESOURCES = {
       { key: 'expiresAt', label: 'Expires at (ISO 8601, blank = default 7 days)', type: 'text', omitIfBlank: true },
     ],
   },
-  attempts: {
-    label: 'Attempts', url: 'attempts/', readOnly: true,
+  instances: {
+    label: 'Exam Instances', url: 'instances/', readOnly: true,
     columns: [
       { key: 'exam', label: 'Exam', type: 'ref', source: 'exams' },
       { key: 'user', label: 'User', type: 'ref', source: 'users' },
@@ -109,7 +109,18 @@ const RESOURCES = {
       { label: 'Detail', icon: 'bi-search', action: 'detail' },
       { label: 'Re-evaluate', icon: 'bi-patch-check', action: 're-evaluate', btnClass: 'btn-outline-primary' },
     ],
-    headerAction: { label: '<i class="bi bi-download me-1"></i>Export CSV', fn: 'exportAttempts' },
+    headerAction: { label: '<i class="bi bi-download me-1"></i>Export CSV', fn: 'exportInstances' },
+  },
+  banks: {
+    label: 'Question Banks', url: 'banks/', readOnly: true,
+    columns: [
+      { key: 'name', label: 'Name' },
+      { key: 'questionCount', label: 'Questions' },
+      { key: 'owner', label: 'Owner', type: 'ref', source: 'users' },
+      { key: 'createdAt', label: 'Created', type: 'date' },
+    ],
+    fields: [],
+    rowActions: [],
   },
   sessions: {
     label: 'Multiplayer Sessions', url: 'sessions/',
@@ -225,10 +236,10 @@ function collectFormData(fields, formEl) {
         if (el.value) payload[field.key] = el.value;
         break;
       case 'multiselect':
-        payload[field.key] = Array.from(el.selectedOptions).map((o) => Number(o.value));
+        payload[field.key] = Array.from(el.selectedOptions).map((o) => o.value);
         break;
       case 'select':
-        payload[field.key] = el.value === '' ? null : (field.source ? Number(el.value) : el.value);
+        payload[field.key] = el.value === '' ? null : el.value;
         break;
       case 'json':
         payload[field.key] = el.value.trim() ? JSON.parse(el.value) : null;
@@ -290,8 +301,8 @@ async function renderListSection(key, opts = {}) {
   content.innerHTML = renderTable(config, items, key, opts);
   wireRowButtons(config, items, key, opts);
 
-  if (config.headerAction && config.headerAction.fn === 'exportAttempts') {
-    headerActionBtn.onclick = () => exportAttemptsCSV(items);
+  if (config.headerAction && config.headerAction.fn === 'exportInstances') {
+    headerActionBtn.onclick = () => exportInstancesCSV(items);
   }
 }
 
@@ -337,8 +348,8 @@ function renderCell(column, value) {
 function wireRowButtons(config, items, key, opts) {
   const content = document.getElementById('admin-content');
   content.querySelectorAll('tr[data-id]').forEach((row) => {
-    const id = Number(row.dataset.id);
-    const item = items.find((i) => i.id === id);
+    const id = row.dataset.id;
+    const item = items.find((i) => String(i.id) === id);
     row.querySelector('[data-action="edit"]')?.addEventListener('click', () => openFormModal(key, item, opts.extraPayload));
     row.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
       if (await confirmDelete(`Delete this ${config.label.toLowerCase()} record?`)) {
@@ -353,8 +364,8 @@ function wireRowButtons(config, items, key, opts) {
     row.querySelectorAll('[data-row-action]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const rowAction = btn.dataset.rowAction;
-        if (rowAction === 'detail') openAttemptDetail(Number(btn.dataset.id), item);
-        if (rowAction === 're-evaluate') openReEvalModal(Number(btn.dataset.id), item);
+        if (rowAction === 'detail') { window.location.href = `/instances/${btn.dataset.id}`; return; }
+        if (rowAction === 're-evaluate') openReEvalModal(btn.dataset.id, item);
       });
     });
   });
@@ -469,13 +480,13 @@ async function openReEvalModal(id, item) {
     saveBtn.disabled = true;
     try {
       const scaleId = document.getElementById('re-eval-scale-select').value;
-      await api(`${API}attempts/${id}/re-evaluate/`, {
+      await api(`${API}instances/${id}/re-evaluate/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gradeScaleId: scaleId ? Number(scaleId) : null, note }),
+        body: JSON.stringify({ gradeScaleId: scaleId || null, note }),
       });
       modal.hide();
-      renderListSection('attempts');
+      renderListSection('instances');
     } catch (err) {
       errorEl.textContent = err.message;
       errorEl.classList.remove('d-none');
@@ -484,119 +495,8 @@ async function openReEvalModal(id, item) {
   };
 }
 
-async function openAttemptDetail(id, item) {
-  const modalEl = document.getElementById('attempt-detail-modal');
-  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-  const body = document.getElementById('attempt-detail-body');
-  const title = document.getElementById('attempt-detail-title');
-  const exportBtn = document.getElementById('attempt-export-missed-btn');
-  const generateBtn = document.getElementById('attempt-generate-exam-btn');
 
-  title.textContent = 'Loading…';
-  body.innerHTML = '<p class="text-muted">Loading…</p>';
-  exportBtn.classList.add('d-none');
-  generateBtn.classList.add('d-none');
-  exportBtn.onclick = null;
-  generateBtn.onclick = null;
-  modal.show();
-
-  try {
-    const data = await api(`${API}attempts/${id}/drill/`);
-    const missed = data.results.filter((r) => !r.isCorrect);
-    const pctClass = data.percentCorrect >= 70 ? 'bg-success' : 'bg-danger';
-
-    title.textContent = `${data.examName} — ${data.user}`;
-
-    const gradeHtml = data.grade
-      ? `<span class="badge bg-info text-dark">${escapeHtml(data.grade)}</span>` : '';
-    const bonusHtml = data.bonusPointsEarned > 0
-      ? `<span class="badge bg-warning text-dark">+${data.bonusPointsEarned} bonus</span>` : '';
-    let html = `<div class="d-flex flex-wrap gap-2 mb-4">
-      <span class="badge bg-secondary">${new Date(data.finishedAt).toLocaleString()}</span>
-      <span class="badge bg-primary">${data.numCorrect}/${data.numQuestions} correct</span>
-      <span class="badge ${pctClass}">${data.percentCorrect}%</span>
-      ${gradeHtml}
-      <span class="badge bg-secondary">${data.basePointsEarned}/${data.totalPoints} pts</span>
-      ${bonusHtml}
-    </div>`;
-
-    if (!missed.length) {
-      html += '<p class="text-success"><i class="bi bi-check-circle me-1"></i>All questions answered correctly.</p>';
-    } else {
-      html += `<h6 class="mb-3">${missed.length} Missed Question${missed.length !== 1 ? 's' : ''}</h6>`;
-      html += missed.map((r, i) => {
-        const correct = r.options.filter((o) => o.isCorrect);
-        const selected = r.options.filter((o) => r.selectedOptionIds.includes(o.id));
-        const correctHtml = correct.map((o) => DOMPurify.sanitize(o.text)).join(', ');
-        const selectedHtml = selected.length ? selected.map((o) => DOMPurify.sanitize(o.text)).join(', ') : '<em>No answer</em>';
-        return `<div class="card mb-3 border-danger-subtle">
-          <div class="card-body py-2">
-            <p class="mb-2 fw-semibold">${i + 1}. ${DOMPurify.sanitize(r.questionText)}</p>
-            <p class="mb-1 text-success small"><i class="bi bi-check-circle me-1"></i><strong>Correct:</strong> ${correctHtml}</p>
-            <p class="${r.explanation ? 'mb-1' : 'mb-0'} text-danger small"><i class="bi bi-x-circle me-1"></i><strong>Your answer:</strong> ${selectedHtml}</p>
-            ${r.explanation ? `<p class="mb-0 text-muted small"><i class="bi bi-lightbulb me-1"></i>${DOMPurify.sanitize(r.explanation)}</p>` : ''}
-          </div>
-        </div>`;
-      }).join('');
-    }
-
-    // Grade log
-    if (data.gradeLog?.length) {
-      html += `<hr>
-      <h6 class="mb-2">Grade History</h6>
-      <div class="table-responsive">
-        <table class="table table-sm table-borderless mb-0">
-          <thead class="text-muted small"><tr><th>Date</th><th>By</th><th>Scale</th><th>Grade</th><th>Note</th></tr></thead>
-          <tbody>
-            ${data.gradeLog.map((e) => `<tr>
-              <td class="text-nowrap small">${new Date(e.changedAt).toLocaleString()}</td>
-              <td class="small">${escapeHtml(e.changedBy)}</td>
-              <td class="small">${e.scaleName ? escapeHtml(e.scaleName) : '<span class="text-muted">—</span>'}</td>
-              <td>${e.newGrade ? `<span class="badge bg-info text-dark">${escapeHtml(e.newGrade)}</span>` : '<span class="text-muted">—</span>'}</td>
-              <td class="small">${escapeHtml(e.note)}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
-    }
-
-    body.innerHTML = html;
-
-    if (missed.length) {
-      exportBtn.classList.remove('d-none');
-      generateBtn.classList.remove('d-none');
-
-      exportBtn.onclick = async () => {
-        const token = await getToken();
-        const res = await fetch(`${API}attempts/${id}/missed-csv/`, {
-          headers: token ? { Authorization: `Token ${token}` } : {},
-        });
-        if (!res.ok) { alert('Export failed.'); return; }
-        const filename = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || `missed_${id}.csv`;
-        downloadBlob(await res.blob(), filename);
-      };
-
-      generateBtn.onclick = async () => {
-        generateBtn.disabled = true;
-        try {
-          const result = await api(`${API}attempts/${id}/generate-exam/`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
-          });
-          modal.hide();
-          alert(`Created "${result.examName}" with ${result.questionCount} question${result.questionCount !== 1 ? 's' : ''}. Find it in your Library.`);
-        } catch (err) {
-          alert(`Failed: ${err.message}`);
-        } finally {
-          generateBtn.disabled = false;
-        }
-      };
-    }
-  } catch (err) {
-    body.innerHTML = `<p class="text-danger">${escapeHtml(err.message)}</p>`;
-  }
-}
-
-function exportAttemptsCSV(items) {
+function exportInstancesCSV(items) {
   const headers = ['ID', 'Exam', 'User', 'Finished', 'Correct', 'Total', '%', 'Points Earned', 'Total Points'];
   const rows = items.map((item) => [
     item.id,
@@ -612,7 +512,7 @@ function exportAttemptsCSV(items) {
   const csv = [headers, ...rows]
     .map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
     .join('\n');
-  downloadBlob(new Blob([csv], { type: 'text/csv' }), 'attempts.csv');
+  downloadBlob(new Blob([csv], { type: 'text/csv' }), 'instances.csv');
 }
 
 // ---- Grade Scales ----
@@ -646,8 +546,8 @@ async function renderGradeScalesSection() {
   </table></div>`;
 
   content.querySelectorAll('tr[data-id]').forEach((row) => {
-    const id = Number(row.dataset.id);
-    const scale = scales.find((s) => s.id === id);
+    const id = row.dataset.id;
+    const scale = scales.find((s) => String(s.id) === id);
     row.querySelector('[data-action="edit"]').addEventListener('click', () => openGradeScaleModal(scale));
     row.querySelector('[data-action="delete"]').addEventListener('click', async () => {
       if (await confirmDelete(`Delete the "${scale.name}" grade scale? Exams using it will no longer have a grade scale assigned.`)) {
@@ -798,6 +698,11 @@ async function renderAppSettingsSection() {
           maxInProgressInstances: Number(form.maxInProgressInstances.value),
         }),
       });
+      const t = form.theme.value;
+      localStorage.setItem('crest-theme', t);
+      document.body.classList.toggle('theme-light', t === 'light');
+      const ic = document.getElementById('theme-icon');
+      if (ic) ic.className = `bi ${t === 'light' ? 'bi-moon-stars-fill' : 'bi-sun-fill'}`;
     } catch (err) {
       errorEl.textContent = err.message;
       errorEl.classList.remove('d-none');
@@ -961,8 +866,8 @@ async function renderGroupsSection() {
   </table></div>`;
 
   content.querySelectorAll('tr[data-id]').forEach((row) => {
-    const id = Number(row.dataset.id);
-    const group = groups.find((g) => g.id === id);
+    const id = row.dataset.id;
+    const group = groups.find((g) => String(g.id) === id);
     row.querySelector('[data-action="edit"]').addEventListener('click', () => openGroupModal(group));
     row.querySelector('[data-action="delete"]').addEventListener('click', async () => {
       if (await confirmDelete(`Delete the "${group.name}" group?`)) {
@@ -1080,6 +985,21 @@ document.querySelectorAll('#admin-tabs button').forEach((btn) => {
   btn.addEventListener('click', () => renderSection(btn.dataset.section));
 });
 
+// Sync theme with the SPA's localStorage key so both pages share state
+(function () {
+  const saved = localStorage.getItem('crest-theme');
+  const isLight = saved === 'light';
+  document.body.classList.toggle('theme-light', isLight);
+  const icon = document.getElementById('theme-icon');
+  if (icon) icon.className = `bi ${isLight ? 'bi-moon-stars-fill' : 'bi-sun-fill'}`;
+  document.getElementById('nav-theme-toggle')?.addEventListener('click', () => {
+    const nowLight = document.body.classList.toggle('theme-light');
+    localStorage.setItem('crest-theme', nowLight ? 'light' : 'dark');
+    const ic = document.getElementById('theme-icon');
+    if (ic) ic.className = `bi ${nowLight ? 'bi-moon-stars-fill' : 'bi-sun-fill'}`;
+  });
+})();
+
 let _who = { isStaff: false, canCreateExam: false };
 
 async function initManage() {
@@ -1091,7 +1011,7 @@ async function initManage() {
   document.getElementById('manage-group-staff').classList.toggle('d-none', !_who.isStaff);
   document.getElementById('manage-group-editor').classList.toggle('d-none', _who.isStaff || !_who.canCreateExam);
   await loadRefData();
-  renderSection(_who.isStaff || _who.canCreateExam ? 'attempts' : 'apiToken');
+  renderSection(_who.isStaff || _who.canCreateExam ? 'instances' : 'apiToken');
 }
 
 initManage();

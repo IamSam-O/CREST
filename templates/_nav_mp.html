@@ -1,14 +1,23 @@
 <script>
-document.getElementById('nav-theme-toggle').addEventListener('click', async () => {
-  const light = document.body.classList.toggle('theme-light');
-  document.getElementById('theme-icon').className = `bi ${light ? 'bi-moon-stars-fill' : 'bi-sun-fill'}`;
-  try {
-    const s = await fetch('/api/settings').then(r => r.json());
-    await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ soundEffectsEnabled: s.soundEffectsEnabled, theme: light ? 'light' : 'dark', maxInProgressInstances: s.maxInProgressInstances }),
-    });
-  } catch {}
-});
+(function(){
+  const t = localStorage.getItem('crest-theme');
+  if (t) {
+    document.body.classList.toggle('theme-light', t === 'light');
+    const icon = document.getElementById('theme-icon');
+    if (icon) icon.className = `bi ${t === 'light' ? 'bi-moon-stars-fill' : 'bi-sun-fill'}`;
+  }
+  document.getElementById('nav-theme-toggle').addEventListener('click', async () => {
+    const light = document.body.classList.toggle('theme-light');
+    localStorage.setItem('crest-theme', light ? 'light' : 'dark');
+    document.getElementById('theme-icon').className = `bi ${light ? 'bi-moon-stars-fill' : 'bi-sun-fill'}`;
+    try {
+      const s = await fetch('/api/settings').then(r => r.json());
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ soundEffectsEnabled: s.soundEffectsEnabled, theme: light ? 'light' : 'dark', maxInProgressInstances: s.maxInProgressInstances }),
+      });
+    } catch {}
+  });
+})();
 </script>

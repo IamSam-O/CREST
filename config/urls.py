@@ -1,3 +1,5 @@
+import os
+
 from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.views import redirect_to_login
@@ -31,13 +33,14 @@ urlpatterns = [
 
 
 def _serve_frontend(request, path=''):
-    # The SPA shell itself has nothing to check auth client-side - app.js
-    # was written for a single-user, no-login app, so it never redirects
-    # to /accounts/login/ on a 401/403. Gate the entry point here instead,
-    # before any API calls have a chance to fail silently.
-    if path in ('', 'index.html') and not request.user.is_authenticated:
+    # Serve real static assets (JS, CSS, fonts, images) directly without auth.
+    # Everything else is an SPA route — gate on auth and serve index.html so
+    # the Vue router handles it client-side (SPA fallback pattern).
+    if path and path != 'index.html' and os.path.isfile(os.path.join(settings.PUBLIC_DIR, path)):
+        return static_serve(request, path, document_root=settings.PUBLIC_DIR)
+    if not request.user.is_authenticated:
         return redirect_to_login(request.get_full_path())
-    return static_serve(request, path or 'index.html', document_root=settings.PUBLIC_DIR)
+    return static_serve(request, 'index.html', document_root=settings.PUBLIC_DIR)
 
 
 # Matches the existing express.static(public) mount at "/" — must stay last
