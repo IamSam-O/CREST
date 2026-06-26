@@ -21,11 +21,7 @@ async function api(url, options = {}) {
   return data;
 }
 
-function escapeHtml(value) {
-  const div = document.createElement('div');
-  div.textContent = value ?? '';
-  return div.innerHTML;
-}
+const escapeHtml = (s) => DOMPurify.sanitize(s ?? '', {ALLOWED_TAGS: []});
 
 function confirmDelete(message) {
   return new Promise((resolve) => {
@@ -109,7 +105,10 @@ const RESOURCES = {
       { key: 'pointsEarned', label: 'Points' },
     ],
     fields: [],
-    rowActions: [{ label: 'Detail', icon: 'bi-search', action: 'detail' }],
+    rowActions: [
+      { label: 'Detail', icon: 'bi-search', action: 'detail' },
+      { label: 'Re-evaluate', icon: 'bi-patch-check', action: 're-evaluate', btnClass: 'btn-outline-primary' },
+    ],
     headerAction: { label: '<i class="bi bi-download me-1"></i>Export CSV', fn: 'exportAttempts' },
   },
   sessions: {
@@ -306,7 +305,7 @@ function renderTable(config, items, key, opts) {
         ? `<button class="btn btn-outline-secondary btn-sm me-1" data-nested="${ra.nested}" data-id="${item.id}" data-label="${escapeHtml(item[ra.parentLabelKey] || '')}">
             <i class="bi ${ra.icon} me-1"></i>${escapeHtml(ra.label)}
            </button>`
-        : `<button class="btn btn-outline-secondary btn-sm me-1" data-row-action="${ra.action}" data-id="${item.id}">
+        : `<button class="btn ${ra.btnClass || 'btn-outline-secondary'} btn-sm me-1" data-row-action="${ra.action}" data-id="${item.id}">
             <i class="bi ${ra.icon} me-1"></i>${escapeHtml(ra.label)}
            </button>`
     ).join('');
@@ -355,6 +354,7 @@ function wireRowButtons(config, items, key, opts) {
       btn.addEventListener('click', () => {
         const rowAction = btn.dataset.rowAction;
         if (rowAction === 'detail') openAttemptDetail(Number(btn.dataset.id), item);
+        if (rowAction === 're-evaluate') openReEvalModal(Number(btn.dataset.id), item);
       });
     });
   });
@@ -427,6 +427,63 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+async function openReEvalModal(id, item) {
+  const modalEl = document.getElementById('admin-form-modal');
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  const form = document.getElementById('admin-form');
+  const errorEl = document.getElementById('admin-form-error');
+  const saveBtn = document.getElementById('admin-form-save');
+
+  document.getElementById('admin-form-modal-title').textContent = 'Re-evaluate Grade';
+  errorEl.classList.add('d-none');
+  saveBtn.disabled = false;
+
+  const scales = await api('/api/grade-scales').catch(() => []);
+  const scaleOptions = scales.map((s) =>
+    `<option value="${s.id}" ${s.id === item.gradeScale ? 'selected' : ''}>${escapeHtml(s.name)}</option>`
+  ).join('');
+
+  form.innerHTML = `
+    <div class="mb-3">
+      <label class="form-label">Grade scale</label>
+      <select class="form-select" id="re-eval-scale-select">
+        <option value="">— None (clear grade) —</option>
+        ${scaleOptions}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Note <span class="text-danger">*</span></label>
+      <input type="text" class="form-control" id="re-eval-note-input" placeholder="Reason for this change">
+    </div>`;
+
+  modal.show();
+
+  saveBtn.onclick = async () => {
+    const note = document.getElementById('re-eval-note-input').value.trim();
+    if (!note) {
+      errorEl.textContent = 'A note is required.';
+      errorEl.classList.remove('d-none');
+      return;
+    }
+    errorEl.classList.add('d-none');
+    saveBtn.disabled = true;
+    try {
+      const scaleId = document.getElementById('re-eval-scale-select').value;
+      await api(`${API}attempts/${id}/re-evaluate/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gradeScaleId: scaleId ? Number(scaleId) : null, note }),
+      });
+      modal.hide();
+      renderListSection('attempts');
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('d-none');
+      saveBtn.disabled = false;
+    }
+  };
+}
+
 async function openAttemptDetail(id, item) {
   const modalEl = document.getElementById('attempt-detail-modal');
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -452,12 +509,15 @@ async function openAttemptDetail(id, item) {
 
     const gradeHtml = data.grade
       ? `<span class="badge bg-info text-dark">${escapeHtml(data.grade)}</span>` : '';
+    const bonusHtml = data.bonusPointsEarned > 0
+      ? `<span class="badge bg-warning text-dark">+${data.bonusPointsEarned} bonus</span>` : '';
     let html = `<div class="d-flex flex-wrap gap-2 mb-4">
       <span class="badge bg-secondary">${new Date(data.finishedAt).toLocaleString()}</span>
       <span class="badge bg-primary">${data.numCorrect}/${data.numQuestions} correct</span>
       <span class="badge ${pctClass}">${data.percentCorrect}%</span>
       ${gradeHtml}
-      <span class="badge bg-secondary">${data.pointsEarned}/${data.totalPoints} pts</span>
+      <span class="badge bg-secondary">${data.basePointsEarned}/${data.totalPoints} pts</span>
+      ${bonusHtml}
     </div>`;
 
     if (!missed.length) {
@@ -478,6 +538,26 @@ async function openAttemptDetail(id, item) {
           </div>
         </div>`;
       }).join('');
+    }
+
+    // Grade log
+    if (data.gradeLog?.length) {
+      html += `<hr>
+      <h6 class="mb-2">Grade History</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-borderless mb-0">
+          <thead class="text-muted small"><tr><th>Date</th><th>By</th><th>Scale</th><th>Grade</th><th>Note</th></tr></thead>
+          <tbody>
+            ${data.gradeLog.map((e) => `<tr>
+              <td class="text-nowrap small">${new Date(e.changedAt).toLocaleString()}</td>
+              <td class="small">${escapeHtml(e.changedBy)}</td>
+              <td class="small">${e.scaleName ? escapeHtml(e.scaleName) : '<span class="text-muted">—</span>'}</td>
+              <td>${e.newGrade ? `<span class="badge bg-info text-dark">${escapeHtml(e.newGrade)}</span>` : '<span class="text-muted">—</span>'}</td>
+              <td class="small">${escapeHtml(e.note)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
     }
 
     body.innerHTML = html;
@@ -579,16 +659,23 @@ async function renderGradeScalesSection() {
 }
 
 const GRADE_OPERATORS = ['>=', '<=', '>', '<', '=='];
+const GRADE_OPERATOR_LABELS = {
+  '>=': 'Greater than or equal to',
+  '<=': 'Less than or equal to',
+  '>':  'Greater than',
+  '<':  'Less than',
+  '==': 'Equal to',
+};
 
 function addGradeScaleEntryRow(container, value = '', operator = '>=', grade = '') {
   const row = document.createElement('div');
   row.className = 'd-flex gap-2 align-items-center gs-entry-row';
   const opOptions = GRADE_OPERATORS.map((op) =>
-    `<option value="${op}" ${op === operator ? 'selected' : ''}>${op}</option>`
+    `<option value="${op}" ${op === operator ? 'selected' : ''}>${GRADE_OPERATOR_LABELS[op]}</option>`
   ).join('');
   row.innerHTML = `
-    <input type="number" class="form-control form-control-sm" placeholder="%" min="0" max="100" value="${escapeHtml(String(value))}" style="width:5rem;">
-    <select class="form-select form-select-sm" style="width:5rem;">${opOptions}</select>
+    <input type="number" class="form-control form-control-sm" placeholder="%" min="0" max="100" value="${escapeHtml(String(value))}" style="width:5rem;flex-shrink:0;">
+    <select class="form-select form-select-sm" style="width:auto;flex-shrink:0;">${opOptions}</select>
     <input type="text" class="form-control form-control-sm" placeholder="Grade (e.g. A)" value="${escapeHtml(grade)}">
     <button type="button" class="btn btn-outline-danger btn-sm gs-remove-row" title="Remove"><i class="bi bi-x-lg"></i></button>
   `;
@@ -993,16 +1080,18 @@ document.querySelectorAll('#admin-tabs button').forEach((btn) => {
   btn.addEventListener('click', () => renderSection(btn.dataset.section));
 });
 
+let _who = { isStaff: false, canCreateExam: false };
+
 async function initManage() {
-  let who = { isStaff: false };
   try {
-    who = await api(API + 'whoami/');
+    _who = await api(API + 'whoami/');
   } catch (err) {
-    // Treat as a plain user - only the My Account/API Token section applies.
+    // Treat as a plain user — only the My Account/API Token section applies.
   }
-  document.getElementById('manage-group-staff').classList.toggle('d-none', !who.isStaff);
+  document.getElementById('manage-group-staff').classList.toggle('d-none', !_who.isStaff);
+  document.getElementById('manage-group-editor').classList.toggle('d-none', _who.isStaff || !_who.canCreateExam);
   await loadRefData();
-  renderSection(who.isStaff ? 'attempts' : 'apiToken');
+  renderSection(_who.isStaff || _who.canCreateExam ? 'attempts' : 'apiToken');
 }
 
 initManage();

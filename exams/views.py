@@ -8,8 +8,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_datetime
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers as rf_serializers
+from drf_spectacular.utils import extend_schema
 from rest_framework import exceptions
 from rest_framework.decorators import api_view, authentication_classes, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -57,38 +56,8 @@ def _require_exam_owner(request, exam):
 
 # ---- Exam library ----
 
-@extend_schema(
-    methods=['GET'], tags=['Exams'], summary='List accessible exams',
-    description='Returns exams visible to the current user. Requires exams.view_exam permission. '
-                'Includes in-progress state and last-attempt scores per exam.',
-    responses={200: inline_serializer('ExamListItem', fields={
-        'id': rf_serializers.IntegerField(),
-        'name': rf_serializers.CharField(),
-        'created_at': rf_serializers.DateTimeField(),
-        'keywords': rf_serializers.CharField(),
-        'question_count': rf_serializers.IntegerField(),
-        'can_edit': rf_serializers.BooleanField(),
-        'last_score': rf_serializers.IntegerField(allow_null=True),
-        'last_total': rf_serializers.IntegerField(allow_null=True),
-        'last_points_earned': rf_serializers.IntegerField(allow_null=True),
-        'last_total_points': rf_serializers.IntegerField(allow_null=True),
-        'attempt_count': rf_serializers.IntegerField(),
-    }, many=True)},
-)
-@extend_schema(
-    methods=['POST'], tags=['Exams'], summary='Create exam from CSV',
-    description='Upload a CSV file to create a new exam. Requires exams.add_exam permission. '
-                'Optionally restrict visibility to specific group IDs.',
-    request=inline_serializer('ExamImportRequest', fields={
-        'file': rf_serializers.FileField(),
-        'name': rf_serializers.CharField(required=False),
-        'group_ids': rf_serializers.ListField(child=rf_serializers.IntegerField(), required=False),
-    }),
-    responses={201: inline_serializer('ExamCreated', fields={
-        'exam_id': rf_serializers.IntegerField(),
-        'question_count': rf_serializers.IntegerField(),
-    })},
-)
+@extend_schema(methods=['GET'], tags=['Exams'], summary='List accessible exams', responses={200: OpenApiTypes.OBJECT})
+@extend_schema(methods=['POST'], tags=['Exams'], summary='Create exam from CSV', responses={201: OpenApiTypes.OBJECT})
 @api_view(['GET', 'POST'])
 @parser_classes([MultiPartParser, FormParser])
 @permission_classes([IsAuthenticated])
@@ -179,20 +148,7 @@ def exam_detail(request, exam_id):
     return Response(status=204)
 
 
-@extend_schema(
-    tags=['Exams'], summary='Update exam settings',
-    description='Owner or admin only. Updates bonus window, keywords, and group access list.',
-    request=inline_serializer('ExamSettingsRequest', fields={
-        'bonus_window_seconds': rf_serializers.IntegerField(),
-        'keywords': rf_serializers.CharField(required=False),
-        'allowed_group_ids': rf_serializers.ListField(child=rf_serializers.IntegerField(), required=False),
-    }),
-    responses={200: inline_serializer('ExamSettings', fields={
-        'bonus_window_seconds': rf_serializers.IntegerField(),
-        'keywords': rf_serializers.CharField(),
-        'allowed_group_ids': rf_serializers.ListField(child=rf_serializers.IntegerField()),
-    })},
-)
+@extend_schema(tags=['Exams'], summary='Update exam settings', responses={200: OpenApiTypes.OBJECT})
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
 def exam_settings(request, exam_id):
@@ -245,12 +201,7 @@ def exam_export(request, exam_id):
     return response
 
 
-@extend_schema(
-    tags=['Exams'], summary='Replace exam questions via CSV',
-    description='Owner or admin only. Deletes all existing questions and imports the new CSV.',
-    request=inline_serializer('CsvReplaceRequest', fields={'file': rf_serializers.FileField()}),
-    responses={200: inline_serializer('ImportResult', fields={'question_count': rf_serializers.IntegerField()})},
-)
+@extend_schema(tags=['Exams'], summary='Replace exam questions via CSV', responses={200: OpenApiTypes.OBJECT})
 @api_view(['PUT'])
 @parser_classes([MultiPartParser, FormParser])
 @permission_classes([IsAuthenticated])
@@ -268,14 +219,7 @@ def exam_import(request, exam_id):
     return Response({'question_count': question_count})
 
 
-@extend_schema(
-    tags=['Exams'], summary='List groups',
-    description='Returns id and name for all groups. Used to populate the group selector when creating or editing an exam.',
-    responses={200: inline_serializer('GroupOption', fields={
-        'id': rf_serializers.IntegerField(),
-        'name': rf_serializers.CharField(),
-    }, many=True)},
-)
+@extend_schema(tags=['Exams'], summary='List groups', responses={200: OpenApiTypes.OBJECT})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def group_list(request):
@@ -285,15 +229,7 @@ def group_list(request):
     return Response(list(Group.objects.order_by('name').values('id', 'name')))
 
 
-@extend_schema(
-    tags=['Exams'], summary='List grade scales',
-    description='Returns id, name, and entries for all grade scales. Used to populate the grade scale selector in exam settings.',
-    responses={200: inline_serializer('GradeScaleOption', fields={
-        'id': rf_serializers.IntegerField(),
-        'name': rf_serializers.CharField(),
-        'entries_json': rf_serializers.ListField(child=rf_serializers.DictField()),
-    }, many=True)},
-)
+@extend_schema(tags=['Exams'], summary='List grade scales', responses={200: OpenApiTypes.OBJECT})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def grade_scale_list(request):
@@ -302,28 +238,8 @@ def grade_scale_list(request):
 
 # ---- Global settings ----
 
-@extend_schema(
-    methods=['GET'], tags=['Exams'], summary='Get app settings',
-    responses={200: inline_serializer('AppSettingsResponse', fields={
-        'sound_effects_enabled': rf_serializers.BooleanField(),
-        'theme': rf_serializers.ChoiceField(choices=['dark', 'light']),
-        'max_in_progress_instances': rf_serializers.IntegerField(),
-    })},
-)
-@extend_schema(
-    methods=['PUT'], tags=['Exams'], summary='Update app settings',
-    description='Requires exams.change_appsettings permission. Must send all three fields.',
-    request=inline_serializer('AppSettingsRequest', fields={
-        'sound_effects_enabled': rf_serializers.BooleanField(),
-        'theme': rf_serializers.ChoiceField(choices=['dark', 'light']),
-        'max_in_progress_instances': rf_serializers.IntegerField(),
-    }),
-    responses={200: inline_serializer('AppSettingsResponse2', fields={
-        'sound_effects_enabled': rf_serializers.BooleanField(),
-        'theme': rf_serializers.ChoiceField(choices=['dark', 'light']),
-        'max_in_progress_instances': rf_serializers.IntegerField(),
-    })},
-)
+@extend_schema(methods=['GET'], tags=['Exams'], summary='Get app settings', responses={200: OpenApiTypes.OBJECT})
+@extend_schema(methods=['PUT'], tags=['Exams'], summary='Update app settings', responses={200: OpenApiTypes.OBJECT})
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
 def app_settings(request):
@@ -364,14 +280,10 @@ def _load_question_detail(question):
     }
 
 
-class QuestionValidationError(Exception):
-    pass
-
-
 def _validate_question_payload(data):
     question_text = (data.get('question_text') or '').strip()
     if not question_text:
-        raise QuestionValidationError('Question text is required.')
+        raise ValueError('Question text is required.')
 
     question_type = Question.MULTI if data.get('question_type') == 'multi' else Question.SINGLE
     raw_options = data.get('options') if isinstance(data.get('options'), list) else []
@@ -382,12 +294,12 @@ def _validate_question_payload(data):
     options = [o for o in options if o['text']]
 
     if len(options) < 2:
-        raise QuestionValidationError('At least 2 options are required.')
+        raise ValueError('At least 2 options are required.')
     correct_count = sum(1 for o in options if o['is_correct'])
     if correct_count == 0:
-        raise QuestionValidationError('At least one option must be marked correct.')
+        raise ValueError('At least one option must be marked correct.')
     if question_type == Question.SINGLE and correct_count > 1:
-        raise QuestionValidationError('Single choice questions can only have one correct option.')
+        raise ValueError('Single choice questions can only have one correct option.')
 
     try:
         points = int(data.get('points'))
@@ -405,25 +317,8 @@ def _validate_question_payload(data):
     }
 
 
-@extend_schema(
-    methods=['GET'], tags=['Exams'], summary='Get exam questions',
-    description='Returns all questions and options for an exam, plus edit capability flag. '
-                'Used to load the question editor and the exam-start setup panel.',
-    responses={200: OpenApiTypes.OBJECT},
-)
-@extend_schema(
-    methods=['POST'], tags=['Exams'], summary='Add question to exam',
-    description='Owner or admin only. Appends a new question with options.',
-    request=inline_serializer('QuestionPayload', fields={
-        'question_text': rf_serializers.CharField(),
-        'question_type': rf_serializers.ChoiceField(choices=['single', 'multi']),
-        'points': rf_serializers.IntegerField(required=False),
-        'image_link': rf_serializers.URLField(required=False, allow_blank=True),
-        'explanation': rf_serializers.CharField(required=False, allow_blank=True),
-        'options': rf_serializers.ListField(child=rf_serializers.DictField()),
-    }),
-    responses={201: OpenApiTypes.OBJECT},
-)
+@extend_schema(methods=['GET'], tags=['Exams'], summary='Get exam questions', responses={200: OpenApiTypes.OBJECT})
+@extend_schema(methods=['POST'], tags=['Exams'], summary='Add question to exam', responses={201: OpenApiTypes.OBJECT})
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def exam_questions(request, exam_id):
@@ -446,7 +341,7 @@ def exam_questions(request, exam_id):
     _require_exam_owner(request, exam)
     try:
         payload = _validate_question_payload(request.data)
-    except QuestionValidationError as exc:
+    except ValueError as exc:
         return Response({'error': str(exc)}, status=400)
 
     with transaction.atomic():
@@ -468,19 +363,7 @@ def exam_questions(request, exam_id):
     return Response(_load_question_detail(question), status=201)
 
 
-@extend_schema(
-    methods=['PUT'], tags=['Exams'], summary='Update question',
-    description='Owner or admin only. Replaces all options.',
-    request=inline_serializer('QuestionUpdatePayload', fields={
-        'question_text': rf_serializers.CharField(),
-        'question_type': rf_serializers.ChoiceField(choices=['single', 'multi']),
-        'points': rf_serializers.IntegerField(required=False),
-        'image_link': rf_serializers.URLField(required=False, allow_blank=True),
-        'explanation': rf_serializers.CharField(required=False, allow_blank=True),
-        'options': rf_serializers.ListField(child=rf_serializers.DictField()),
-    }),
-    responses={200: OpenApiTypes.OBJECT},
-)
+@extend_schema(methods=['PUT'], tags=['Exams'], summary='Update question', responses={200: OpenApiTypes.OBJECT})
 @extend_schema(methods=['DELETE'], tags=['Exams'], summary='Delete question', responses={204: None})
 @api_view(['PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
@@ -494,7 +377,7 @@ def question_detail(request, question_id):
 
     try:
         payload = _validate_question_payload(request.data)
-    except QuestionValidationError as exc:
+    except ValueError as exc:
         return Response({'error': str(exc)}, status=400)
 
     with transaction.atomic():
@@ -712,6 +595,11 @@ def exam_submit(request, exam_id):
             'options': [{'id': o.id, 'text': o.option_text, 'is_correct': o.is_correct} for o in options],
         })
 
+    grade = None
+    if exam.grade_scale_id:
+        pct = round(num_correct / len(answers) * 100) if answers else 0
+        grade = exam.grade_scale.compute_grade(pct) or 'N/A'
+
     with transaction.atomic():
         attempt = Attempt.objects.create(
             exam=exam,
@@ -721,6 +609,8 @@ def exam_submit(request, exam_id):
             num_correct=num_correct,
             total_points=total_points,
             points_earned=points_earned,
+            grade=grade,
+            grade_scale=exam.grade_scale,
         )
         AttemptAnswer.objects.bulk_create([
             AttemptAnswer(
@@ -733,11 +623,6 @@ def exam_submit(request, exam_id):
             for r in results
         ])
 
-    grade = None
-    if exam.grade_scale_id:
-        pct = round(num_correct / len(answers) * 100) if answers else 0
-        grade = exam.grade_scale.compute_grade(pct)
-
     return Response({
         'attempt_id': attempt.id,
         'exam_id': exam.id,
@@ -746,26 +631,14 @@ def exam_submit(request, exam_id):
         'num_correct': num_correct,
         'total_points': total_points,
         'points_earned': points_earned,
-        'grade': grade,
+        'grade': attempt.grade,
         'results': results,
     })
 
 
 # ---- Attempt history ----
 
-@extend_schema(
-    tags=['Exams'], summary='List attempts for an exam',
-    description='Returns all attempts for the current user. Users with exams.view_attempt see all users\' attempts.',
-    responses={200: inline_serializer('AttemptSummary', fields={
-        'id': rf_serializers.IntegerField(),
-        'started_at': rf_serializers.DateTimeField(),
-        'finished_at': rf_serializers.DateTimeField(),
-        'num_questions': rf_serializers.IntegerField(),
-        'num_correct': rf_serializers.IntegerField(),
-        'total_points': rf_serializers.IntegerField(),
-        'points_earned': rf_serializers.IntegerField(),
-    }, many=True)},
-)
+@extend_schema(tags=['Exams'], summary='List attempts for an exam', responses={200: OpenApiTypes.OBJECT})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def exam_attempts(request, exam_id):
@@ -778,16 +651,11 @@ def exam_attempts(request, exam_id):
     return Response(list(attempts))
 
 
-@extend_schema(
-    tags=['Exams'], summary='Get attempt detail with per-question results',
-    description='Returns full attempt with per-question correctness, selected options, and explanations. '
-                'Own attempts only unless the user has exams.view_attempt.',
-    responses={200: OpenApiTypes.OBJECT},
-)
+@extend_schema(tags=['Exams'], summary='Get attempt detail with per-question results', responses={200: OpenApiTypes.OBJECT})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def attempt_detail(request, attempt_id):
-    attempt = get_object_or_404(Attempt.objects.select_related('exam__grade_scale'), id=attempt_id)
+    attempt = get_object_or_404(Attempt, id=attempt_id)
     if attempt.user_id != request.user.id and not request.user.has_perm('exams.view_attempt'):
         raise exceptions.PermissionDenied('Missing permission: exams.view_attempt')
 
@@ -808,11 +676,6 @@ def attempt_detail(request, attempt_id):
             'options': [{'id': o.id, 'text': o.option_text, 'is_correct': o.is_correct} for o in options],
         })
 
-    grade = None
-    if attempt.exam.grade_scale_id:
-        pct = round(attempt.num_correct / attempt.num_questions * 100) if attempt.num_questions else 0
-        grade = attempt.exam.grade_scale.compute_grade(pct)
-
     return Response({
         'id': attempt.id,
         'exam_id': attempt.exam_id,
@@ -822,6 +685,6 @@ def attempt_detail(request, attempt_id):
         'num_correct': attempt.num_correct,
         'total_points': attempt.total_points,
         'points_earned': attempt.points_earned,
-        'grade': grade,
+        'grade': attempt.grade,
         'results': results,
     })
