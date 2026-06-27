@@ -1,6 +1,6 @@
 # CREST
 
-CREST is a self-hosted exam practice app. Admins build exams from CSV question banks, registered users take them solo with scoring and timed-bonus points, and hosts can run live multiplayer quiz sessions that anonymous guests can join over WebSockets.
+CREST is a self-hosted exam practice app. Editors/admins import question banks from CSV and configure exams (draw size, optional category-weighted sampling, grade scales) on top of them; registered users take exams solo with scoring, timed-bonus points, and letter grades; and hosts can run live multiplayer quiz sessions that anonymous guests can join over WebSockets.
 
 ## About this project
 
@@ -8,12 +8,13 @@ This is a personal project, and generative AI was used extensively in its develo
 
 ## Features
 
-- **Exam practice** — single-choice and checkbox (multi-answer) questions, per-question points, optional images and answer explanations, and a configurable time-bonus window.
-- **CSV import/export** — build or update an exam by uploading a CSV (template at [`public/template.csv`](public/template.csv)); re-uploading replaces an exam's question set wholesale. Question/option text is sanitized on import (`exams/sanitize.py`).
-- **Access control** — exams are public by default, or restricted to specific groups; exam owners and admins can always manage their own exams.
+- **Question banks** — single-choice and checkbox (multi-answer) questions with per-question points, optional categories, images, and answer explanations. Imported/exported as CSV (template at [`frontend/public/template.csv`](frontend/public/template.csv)); re-importing replaces a bank's question set wholesale. Question/option text is sanitized on import (`exams/sanitize.py`).
+- **Exams** — a reusable, configurable draw on top of a question bank: draw size, an optional per-category weighting for sampling (remainder filled proportionally from the full pool), a time-bonus window, and an optional grade scale.
+- **Grade scales** — admin-defined thresholds (e.g. `>= 90 → A`) that compute a letter grade on submission; an admin "re-evaluate" action recomputes a past attempt's grade (with an audit log) if the scale changes later.
+- **Access control** — exams are public by default, or restricted to specific groups; exam/bank owners and admins can always manage their own.
 - **Multiplayer** — a host starts a room for an exam, shares a room code/passcode, and guests join and play live without needing an account (`multiplayer/`, Django Channels + Redis).
 - **Accounts & invites** — Django auth with email-based invites, forced password change on first login, and a personal API token for authenticated REST access.
-- **Admin UI** — a `/manage/` console for managing exams, users, groups, invites, and SMTP settings (stored encrypted at rest, editable without a redeploy).
+- **Admin UI** — a `/manage/` console for managing banks, exams, grade scales, users, groups, invites, and SMTP settings (stored encrypted at rest, editable without a redeploy).
 - **REST API** — documented via OpenAPI/Swagger at `/api/docs/`; gameplay endpoints (start/check/submit/progress, multiplayer host control) are session-only and intentionally excluded from token auth and the published spec.
 
 ## Tech stack
@@ -21,7 +22,7 @@ This is a personal project, and generative AI was used extensively in its develo
 - **Backend**: Django 5 + Django REST Framework, Django Channels (ASGI, via Daphne) for WebSockets
 - **Realtime**: Redis (Channels layer for multiplayer)
 - **Database**: SQLite (file-based, stored under `data/`)
-- **Frontend**: static single-page app served from `public/` (vanilla JS)
+- **Frontend**: Vue 3 SPA (`frontend/`) — Vite, Vue Router, Pinia, Bootstrap 5, Quill (rich-text question/explanation editing), DOMPurify — built to `public/` and served by Django as static files
 - **Docs**: drf-spectacular (OpenAPI schema + Swagger UI)
 
 ## Running locally (Docker)
@@ -33,7 +34,7 @@ cp .env.example .env   # optional - defaults work for local use
 docker compose up
 ```
 
-This starts Redis and the app (`ghcr.io/iamsam-o/crest:latest`) on **http://localhost:3000**, persisting data to `./data`. On first boot the container generates a Django secret key (saved to `data/.secret_key`, not configured via env), runs migrations, and collects static files.
+This starts Redis and the app (`ghcr.io/iamsam-o/crest:latest`) on **http://localhost:3000**, persisting data to `./data`. The image is built in two stages — a Node 20 stage compiles the Vue frontend (`frontend/`) into `public/`, then the Python stage serves it — so nothing needs to be built locally to use the image. On first boot the container generates a Django secret key (saved to `data/.secret_key`, not configured via env), runs migrations, and collects static files.
 
 See [`.env.example`](.env.example) for available environment variables, notably `DJANGO_CSRF_TRUSTED_ORIGINS` if you're putting CREST behind a reverse proxy on a public domain.
 
@@ -41,12 +42,15 @@ See [`.env.example`](.env.example) for available environment variables, notably 
 
 ```bash
 pip install -r requirements.txt
+cd frontend && npm install && npm run build && cd ..   # builds the Vue SPA into public/
 redis-server &          # required for multiplayer (Channels layer)
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py collectstatic --noinput
 daphne -b 0.0.0.0 -p 3000 config.asgi:application
 ```
+
+For frontend development with hot reload, run `python manage.py runserver 8000` alongside `cd frontend && npm run dev` (Vite on `:5173`, proxying `/api`, `/accounts`, `/manage`, `/multiplayer`, and `/ws` to `:8000` — see `frontend/vite.config.js`).
 
 Useful environment variables (see [`config/settings.py`](config/settings.py)):
 
@@ -63,11 +67,12 @@ The Django secret key is not set via environment variable — it's generated on 
 
 ```
 accounts/      auth, invites, encrypted email settings, password-change middleware
-exams/         exam/question/option models, CSV import/export, attempt scoring
+exams/         bank/exam/instance models, sampling + grading logic, CSV import/export
 multiplayer/   room lobby/host/play views + Channels consumer for live quizzes
 adminui/       /manage/ console (DRF viewsets + API routes backing it)
 config/        Django settings, URL root, ASGI/WSGI entrypoints
-public/        static SPA frontend (served at /)
+frontend/      Vue 3 SPA source (Vite project; builds into public/)
+public/        built frontend output, served by Django at /
 templates/     server-rendered pages (login, invites, multiplayer lobby/room)
 ```
 
